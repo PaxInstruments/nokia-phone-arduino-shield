@@ -1,9 +1,26 @@
 // Notes
 // China Mobile SMS Center: +86-13800100500
+//
+// AltSoftSerial always uses these pins:
+//
+// Board          Transmit  Receive   PWM Unusable
+// ----          -------  ------   ------------
+// Arduino Uno        9         8         10
+// Arduino Leonardo   5        13       (none)
+// Arduino Mega      46        48       44, 45
+// Wiring-S           5         6          4
+// Sanguino          13        14         12
+//
+// For Uno connect Arduino pin D9 to F-Bus RX
+// Connect Arduino D8 to F-Bus TX
+//
 
+
+#include <AltSoftSerial.h>
+
+AltSoftSerial altSerial;
 
 #define DEBUG            0 // Debugging code: 0 disable, 1 enable
-
 // Creates a funciton for printing to serial during debugging.
 #if DEBUG
   #define DEBUG_PRINT(x)    Serial.print (x)
@@ -17,15 +34,17 @@
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  
+  altSerial.begin(115200);
+  delay(1000);
 }
   
 void loop() {
   DEBUG_PRINTLN("<loop()>");
   prepare();
-  Serial.println("");
   delay(100);
+  Serial.println("");
   printHWSW();
- // testFun();
   Serial.println("");
   DEBUG_PRINTLN("</loop()>");
   delay(4000);
@@ -34,7 +53,7 @@ void loop() {
 void prepare() {
   DEBUG_PRINTLN("<prepare()>");
   for (int i = 0; i < 128; i++) {
-    Serial.write(0x55);
+    altSerial.write(0x55);
   }
   DEBUG_PRINTLN("");
   DEBUG_PRINTLN("</prepare()>");
@@ -43,7 +62,7 @@ void prepare() {
 void send(byte message[], int sizeArray) {
   DEBUG_PRINTLN("<send()>");
   for (int i = 0; i < sizeArray; i++) {
-    Serial.write(message[i]);
+    altSerial.write(message[i]);
   }
   DEBUG_PRINTLN("");
   DEBUG_PRINTLN("</send()>");
@@ -54,10 +73,10 @@ void printHWSW() {
   byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
   byte returnMessage[500];
   send(hwsw,sizeof(hwsw));
-  delay(100);
+  delay(50);
   DEBUG_PRINT("<returnMessage>");
-  for (int i = 0; Serial.available() > 0; i++) {
-      byte incomingByte = Serial.read();
+  for (int i = 0; altSerial.available() > 0; i++) {
+      byte incomingByte = altSerial.read();
       returnMessage[i] = incomingByte;
       #if DEBUG
         Serial.print(incomingByte, HEX);DEBUG_PRINT(" ");
@@ -108,4 +127,5 @@ void testFun() {
   }
   DEBUG_PRINTLN("");
   DEBUG_PRINTLN("</testFun()>");
-}
+-}
+
