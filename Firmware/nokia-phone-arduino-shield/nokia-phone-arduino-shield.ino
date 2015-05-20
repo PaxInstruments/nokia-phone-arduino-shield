@@ -1,5 +1,8 @@
+// Notes
+// China Mobile SMS Center: +86-13800100500
 
-#define DEBUG            1 // Debugging code: 0 disable, 1 enable
+
+#define DEBUG            0 // Debugging code: 0 disable, 1 enable
 
 // Creates a funciton for printing to serial during debugging.
 #if DEBUG
@@ -21,8 +24,8 @@ void loop() {
   prepare();
   Serial.println("");
   delay(100);
-  //printHWSW();
-  testFun();
+  printHWSW();
+ // testFun();
   Serial.println("");
   DEBUG_PRINTLN("</loop()>");
   delay(4000);
@@ -49,8 +52,9 @@ void send(byte message[], int sizeArray) {
 void printHWSW() {
   DEBUG_PRINTLN("<printHWSW()>");
   byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
-  byte returnMessage[214];
+  byte returnMessage[500];
   send(hwsw,sizeof(hwsw));
+  delay(100);
   DEBUG_PRINT("<returnMessage>");
   for (int i = 0; Serial.available() > 0; i++) {
       byte incomingByte = Serial.read();
