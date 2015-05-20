@@ -11,14 +11,10 @@
 #endif
 
 // Message arrays
-byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
-
 void setup() {
   Serial.begin(115200);
   delay(1000);
 }
-
-
   
 void loop() {
   prepare();
@@ -49,6 +45,28 @@ void send(byte message[], int sizeArray) {
 
 void printHWSW() {
   DEBUG_PRINTLN("<PRINTHWSW()>");
+  byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
+  byte returnMessage[214];
+  send(hwsw,sizeof(hwsw));
+  for (int i = 0; Serial.available() > 0; i++) {
+      byte incomingByte = Serial.read();
+      returnMessage[i] = incomingByte;
+      #if DEBUG
+        Serial.print(incomingByte, HEX);DEBUG_PRINT(" ");
+      #endif
+  }
+  DEBUG_PRINTLN("");
+  for (int j = 10; j < 48; j++) {
+ //   Serial.print(j);Serial.print(" = ");Serial.println(returnMessage[j], HEX);
+  Serial.write(returnMessage[j]);
+  }
+  DEBUG_PRINTLN("");
+  DEBUG_PRINTLN("</PRINTHWSW()>");
+}
+
+void printReturnMessage() {
+  DEBUG_PRINTLN("<printReturnMessage()>");
+  byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
   send(hwsw,sizeof(hwsw));
   while (Serial.available() > 0) {
       int incomingByte = Serial.read();
@@ -56,6 +74,6 @@ void printHWSW() {
       Serial.print(" ");
   }
   DEBUG_PRINTLN("");
-  DEBUG_PRINTLN("</PRINTHWSW()>");
+  DEBUG_PRINTLN("</printReturnMessage()>");
 }
 
