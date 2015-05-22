@@ -57,24 +57,13 @@ void prepare() {
   DEBUG_PRINTLN("</prepare()>");
 }
 
-void send(byte message[], int sizeArray) {
-  DEBUG_PRINTLN("<send()>");
-  for (int i = 0; i < sizeArray; i++) {
-    altSerial.write(message[i]);
-  }
-  DEBUG_PRINTLN("");
-  DEBUG_PRINTLN("</send()>");
-}
-
-
-
 void printHWSW() {
   DEBUG_PRINTLN("<printHWSW()>");
   prepare();
   delay(100);
   byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
   byte returnMessage[500];
-  send(hwsw,sizeof(hwsw));
+  altSerial.write(hwsw,sizeof(hwsw));
   delay(50);
   DEBUG_PRINT("<returnMessage>");
   for (int i = 0; altSerial.available() > 0; i++) {
