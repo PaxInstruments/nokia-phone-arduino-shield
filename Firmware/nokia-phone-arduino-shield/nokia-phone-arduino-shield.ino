@@ -15,7 +15,6 @@
 // Connect Arduino D8 to F-Bus TX
 //
 
-
 #include <AltSoftSerial.h>
 
 AltSoftSerial altSerial;
@@ -96,27 +95,5 @@ void printHWSW() {
   }
   DEBUG_PRINTLN("");
   DEBUG_PRINTLN("</printHWSW()>");
-}
-
-void testFun() {
-  DEBUG_PRINTLN("<testFun()>");
-  byte getVer[] = { 0x1F, 0x00, 0x04, 0x79, 0x00, 0x12, 0x02, 0x01, 0x02, 0x06, 0x00, 0x56, 0x20, 0x30, 0x36, 0x2E, 0x30, 0x30, 0x0A, 0x48, 0x46, 0x55, 0x32, 0x00 }; // get HW and SW info
-  byte returnMessage[214];
-  send(getVer,sizeof(getVer));
-  DEBUG_PRINT("<returnMessage>");
-  for (int i = 0; Serial.available() > 0; i++) {
-      byte incomingByte = Serial.read();
-      returnMessage[i] = incomingByte;
-      #if DEBUG
-        Serial.print(incomingByte, HEX);DEBUG_PRINT(" ");
-      #endif
-  }
-  DEBUG_PRINT("</returnMessage>");
-  Serial.println();
-  for (int j = 0; j < sizeof(getVer); j++) {
-    Serial.write(returnMessage[j]);
-  }
-  DEBUG_PRINTLN("");
-  DEBUG_PRINTLN("</testFun()>");
 }
 
