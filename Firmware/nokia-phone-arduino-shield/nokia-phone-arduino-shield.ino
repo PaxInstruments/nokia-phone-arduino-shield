@@ -45,6 +45,7 @@ void loop() {
   Serial.print("SW version: ");Serial.println(myPhone.softwareVersion());
   Serial.print("HW version: ");Serial.println(myPhone.hardwareVersion());
   Serial.print("Date code: ");Serial.println(myPhone.dateCode());
+  Serial.println();
   delay(1000);
 }
 

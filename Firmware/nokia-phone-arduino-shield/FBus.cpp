@@ -28,7 +28,6 @@ String FBus::softwareVersion() {
   _serialPort->write(hwsw,sizeof(hwsw));
   char incomingMessage[200];
   delay(50);
-  Serial.println();
   for (int i = 0; _serialPort->available() > 0; i++) {
       char incomingByte = _serialPort->read();
       if (incomingByte == 'V') {
@@ -50,7 +49,6 @@ String FBus::hardwareVersion() {
   _serialPort->write(hwsw,sizeof(hwsw));
   char incomingMessage[200];
   delay(50);
-  Serial.println();
   for (int i = 0; _serialPort->available() > 0; i++) {
       char incomingByte = _serialPort->read();
       if (incomingByte == 'V') {
@@ -72,7 +70,6 @@ String FBus::dateCode() {
   _serialPort->write(hwsw,sizeof(hwsw));
   char incomingMessage[200];
   delay(50);
-  Serial.println();
   for (int i = 0; _serialPort->available() > 0; i++) {
       char incomingByte = _serialPort->read();
       if (incomingByte == 'V') {
