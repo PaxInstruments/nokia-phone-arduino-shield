@@ -13,8 +13,9 @@
 class FBus {
     public:
         FBus(Stream *serialPort);
-    	void getSoftwareVersion();
-    	void getHardwardVersion();
+    	String softwareVersion();
+    	String hardwareVersion();
+    	String dateCode();
     	void getCopyright();
         void prepareThing();
         void getHWSWFrame();

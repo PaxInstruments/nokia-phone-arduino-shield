@@ -35,15 +35,16 @@ FBus myPhone(&altSerial);
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  delay(200);
   
   altSerial.begin(115200);
-  delay(1000);
+  delay(200);
 }
   
 void loop() {
-  Serial.println("");
-  myPhone.getHWSWFrame();
-  delay(2000);
+  Serial.print("SW version: ");Serial.println(myPhone.softwareVersion());
+  Serial.print("HW version: ");Serial.println(myPhone.hardwareVersion());
+  Serial.print("Date code: ");Serial.println(myPhone.dateCode());
+  delay(1000);
 }
 
