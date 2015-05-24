@@ -18,7 +18,6 @@
 #include <AltSoftSerial.h>
 #include "FBus.h"
 
-
 AltSoftSerial altSerial;
 
 FBus myPhone(&altSerial);
@@ -26,26 +25,26 @@ FBus myPhone(&altSerial);
 #define DEBUG            0 // Debugging code: 0 disable, 1 enable
 // Creates a funciton for printing to serial during debugging.
 #if DEBUG
-  #define DEBUG_PRINT(x)    Serial.print (x)
-  #define DEBUG_PRINTLN(x)  Serial.println (x)
+    #define DEBUG_PRINT(x)    Serial.print (x)
+    #define DEBUG_PRINTLN(x)  Serial.println (x)
 #else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTLN(x)
+    #define DEBUG_PRINT(x)
+    #define DEBUG_PRINTLN(x)
 #endif
 
 void setup() {
-  Serial.begin(115200);
-  delay(200);
-  
-  altSerial.begin(115200);
-  delay(200);
+    Serial.begin(115200);
+    delay(200);
+    
+    altSerial.begin(115200);
+    delay(200);
 }
-  
+    
 void loop() {
-  Serial.print("SW version: ");Serial.println(myPhone.softwareVersion());
-  Serial.print("HW version: ");Serial.println(myPhone.hardwareVersion());
-  Serial.print("Date code: ");Serial.println(myPhone.dateCode());
-  Serial.println();
-  delay(1000);
+    Serial.print("SW version: ");Serial.println(myPhone.softwareVersion());
+    Serial.print("HW version: ");Serial.println(myPhone.hardwareVersion());
+    Serial.print("Date code: ");Serial.println(myPhone.dateCode());
+    Serial.println();
+    delay(1000);
 }
 

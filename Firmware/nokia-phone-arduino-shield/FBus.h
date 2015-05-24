@@ -16,11 +16,9 @@ class FBus {
     	String softwareVersion();
     	String hardwareVersion();
     	String dateCode();
-    	void getCopyright();
-        void prepareThing();
-        void getHWSWFrame();
     private:
         Stream* _serialPort;
+        void prepareThing();
 };
 
 #endif
