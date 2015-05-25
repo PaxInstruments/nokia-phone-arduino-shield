@@ -15,14 +15,19 @@ FBus::FBus(Stream *serialPort) {
     _serialPort = serialPort;
 }
 
-void FBus::prepareThing() {// Perpares phone to receice F-Bus messages
+FBus::FBus(Stream *serialPort, int SMSCenter) {
+    _serialPort = serialPort;
+    _SMSCenter = SMSCenter;
+}
+
+void FBus::initializeBus() {// Perpares phone to receice F-Bus messages
     for (int i = 0; i < 128; i++) {
         _serialPort->write(0x55);
     }
 }
 
 String FBus::softwareVersion() {
-    prepareThing();
+    initializeBus();
     delay(100);
     byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
     _serialPort->write(hwsw,sizeof(hwsw));
@@ -43,7 +48,7 @@ String FBus::softwareVersion() {
 }
 
 String FBus::hardwareVersion() {
-    prepareThing();
+    initializeBus();
     delay(100);
     byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
     _serialPort->write(hwsw,sizeof(hwsw));
@@ -64,7 +69,7 @@ String FBus::hardwareVersion() {
 }
 
 String FBus::dateCode() {
-    prepareThing();
+    initializeBus();
     delay(100);
     byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
     _serialPort->write(hwsw,sizeof(hwsw));
@@ -83,3 +88,16 @@ String FBus::dateCode() {
     }
     return dateCode;
 }
+
+char FBus::checksumOdd() {
+  // Go through the message array and outout an XOR of the odd numbered bytes.
+  // The first byte in the array is odd. This shoudl work both sending and receiving.
+}
+
+char FBus::checksumEven() {
+  // Go through the message array and outout an XOR of the even numbered bytes.
+  // The first byte in the array is odd. This shoudl work both sending and receiving.
+  
+}
+
+
