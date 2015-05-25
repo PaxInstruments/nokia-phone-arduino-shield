@@ -139,7 +139,10 @@ Use cases:
 - From Gnokii the Nokia 3100 uses nk6510.c. Here are all the compatible phones listed with the 3100: 6510, 6310, 8310, 6310i, 6360, 6610, 6100, 5100, 3510, 3510i, 3595, 6800, 6810, 6820, 6820b, 6610i, 6230, 6650, 7210, 7250, 7250i, 7600, 6170, 6020, 6230i, 5140, 5140i, 6021, 6500, 6220, 3120b, 3100, 3120, 6015i, 6101, 6680, 6280, 3220, 6136, 6233, 6822, 6300, 6030, 3110c, series60, series40
 - The Nokia 3100 uses FBUS version 2
 - All the weird bullshit that was happening may have been due to me using nk6110.txt commands rather than nk 6510.txt commands. The software may accept a bunch of identify commands just so it can handshake and pass output the device's actual model number. Maybe when the phone reads a message that seems like the identify request it sends back identify responses in several formats in hopes the host will be able to read one and determine the phone's model number.
-
+- What are bytes six, seven and maybe eight for? 
+- It looks like the message I compose using the gnokii docs from git is different from what I see gnokii transmitting. I'll have to get better data when the new boards some in.
+- Try to design things such that the uC does not have to store large values. Process and pack items as they come in. checksumOdd() and checksumEven() can be called as a message is being made. Then we only need to store the result in memeory.
+- According to InsideGadgets, "After lots of testing, I found that you should firstly send 128 ‘U’, then send the request for the HW&SW command and then send the SMS."
 
 
 
