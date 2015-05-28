@@ -15,12 +15,14 @@
 // Connect Arduino D8 to F-Bus TX
 //
 
-#include <AltSoftSerial.h>
+//#include <AltSoftSerial.h>
+#include <SoftwareSerial.h>
 #include "FBus.h"
 
-AltSoftSerial altSerial;
+//AltSoftSerial mySerial;
+SoftwareSerial mySerial(8, 9); // RX, TX
 
-FBus myPhone(&altSerial);
+FBus myPhone(&mySerial);
 
 #define DEBUG            0 // Debugging code: 0 disable, 1 enable
 // Creates a funciton for printing to serial during debugging.
@@ -36,7 +38,7 @@ void setup() {
     Serial.begin(115200);
     delay(200);
     
-    altSerial.begin(115200);
+    mySerial.begin(115200);
     delay(200);
 }
     
