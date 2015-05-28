@@ -100,4 +100,111 @@ char FBus::checksumEven() {
   
 }
 
+/*
+0x02: SMS HANDLING
+    s Send SMS              { 0x02, 0x00, 0x00, 0x00, 0x55, 0x55,
+                              0x01 (1 big block), 0x02 (submit), length (big block),
+			      type, reference, PID, DCS, 0x00, # blocks,
+			      blocks... }
+    r Send SMS              { 0x03, 0x00, 0x01, 0x0c, 0x08, 0x00, 0x00, 0xdb, 0x55, 0x55, 0x00 }
+
+    s Get SMSC              { 0x14, location, 0x00 }
+    r Get SMSC              { 0x15, err,  0x01, 0x0b, 0x28?, location, 0xf8?,
+                              format, 0x00, validity, #blocks, blocks ...}
+			    where: err - 0x00 ok, 0x02 - empty
+			           name block: { 0x81, blklen, namelen (bytes), 0x00, name (unicode) }
+				   number block: { 0x82, blklen, type, ?, number (bcd) }
+				   where type: 0x01 - default, 0x02 - number
+
+0x0a: NETSTATUS
+    s Get RF Level          { 0x0b, 0x00, 0x02, 0x00, 0x00, 0x00 }
+    r GET RF Level          { 0x0c, 0x00, 0x01, 0x04, 0x04, level, 0x5f }
+
+0x14: FOLDER/PICTURE SMS HANDLING
+    s Get SMS Status        { 0x08, 0x00, 0x01 }
+    r Get SMS Status        { 0x09, 0x00, #blocks, 
+                              type, length, blocknumber,
+                              a (2 octets), b (2 octets), c (2 octets), 0x00, 0x55 ,
+                              type, length, blocknumber, 
+                              d (2 octets), e (2 octets), f (2 octets), 0x01, 0x55 }
+
+                              where:
+                              a - max. number of messages in phone memory
+                              b - Number of used messages in phone memory. These
+                                are messages manually moved from the other folders.
+                                Picture messages are saved here.
+                              c - Number of unread messages in phone memory. Probably
+                                only smart messages.
+                              d - max. number of messages on SIM
+                              e - Number of used messages in SIM memory. These are
+                                either received messages or saved into Outbox/Inbox.
+                                Note that you *can't* save message into this memory
+                                using 'Move' option. Picture messages are not here.
+                              f - Number of unread messages in SIM memory
+
+    s Get SMS from folder   { 0x02, memory, folderID, location, location, 0x01, 0x00}
+                            where: 
+			    memory - 0x01 for SIM, 0x02 for phone (SIM only for IN/OUTBOX
+                            folderID - see 0x14/0x017B
+    r Get SMS from folder   { 0x03, 0x00, 0x01, memory, folderID, locationH, locationL, 0x55, 0x55, 0x55,  
+                              0x01 (on big block), type, length of big block, 
+			      [date/time1], [date/time2], # blocks,
+			      type, length, data...
+			      ... }
+
+    s Delete SMS            { 0x04, memory, folderID, location, location, 0x0F, 0x55 }
+    r Delete SMS            { 0x05 }
+
+    s Get folder status     { 0x0c, memory, folderID, 0x0F, 0x55, 0x55, 0x55, 0x55}
+                            where: folderID - see 0x14/0x017B
+    r Get folder status     { 0x0d, 0x00, length, number of entries (2 bytes), 
+			    entry1number (2 bytes), entry2number(2 bytes), ..., 0x55[]}
+
+    s Get message info      { 0x0e, memory, folderID, location, location, 0x55, 0x55 }
+    r Get message info      { 0x0f, 0x00, 0x01, 0x00, 0x50, memory, type, 0x00, location, FolderID, status
+
+                            where: type = 0x00 - MT
+                                          0x01 - delivery report
+                                          0x02 - MO
+                                          0x80 - picture message
+                            where: status=0x01 - received/read
+					  0x03 - received/unread
+					  0x05 - stored/sent
+					  0x07 - stored/not sent
+
+    s Get folder names      { 0x12, 0x00, 0x00}
+    r Get folder names      { 0x13, 0x00, number of blocks, blocks... }
+			    where block is: { 0x01, blocklen, folderID, length, 0x00, 0x00, padding... }
+                               where: folderID = 0x02 - Inbox
+                                                 0x03 - Outbox
+                                                 0x04 - Archive
+                                            0x05 - Templates
+                                            0x06 - first "My folders"
+                                            0x07 - second "My folders"
+                                            0x08 - third -"-
+                                            and so on
+				      blocklen = length of the block including
+				                 the 0x01 and blocklen itself
+						 e.g.: 0x28 - 6510
+						       0x58 - 6610
+
+0x17: BATTERY
+    s Get battery level     { 0x0a, 0x02, 0x00 }
+    r Get battery level     { 0x0b, 0x01, 0x01, 0x16, level, 0x07, 0x05 }
+                            where: level: 1-7 (as in phone display)
+
+0x19: CLOCK
+    s Get date              { 0x0a, 0x00, 0x00 }
+    r Get date              { 0x0b, 0x00, 0x02 (blocks), 
+                              0x01 (type), 0x0c (length), 0x01, 0x03, year (2 octets), month, day, hour, minute, second, 0x00, 
+                              0x04, 0x04, 0x01, 0x00 }
+                              
+0x1b: IDENTITY
+    s Get IMEI              { 0x00, 0x41 }
+    r Get IMEI              { 0x01, 0x00, 0x01, 0x41, 0x14, 0x00, 0x10, {IMEI(ASCII)}, 0x00 }
+    s get HW&SW version     { 0x07, 0x00, 0x01 }
+    r get HW&SW version     { 0x08, 0x00, 0x01, 0x58, 0x29, 0x00, 0x22, "V " "firmware\n" "firmware date\n"
+                              "model\n" "(c) NMP.", 0x0a, 0x43, 0x00, 0x00, 0x00 }
+                              
+*/
 

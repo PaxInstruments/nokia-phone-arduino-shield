@@ -23,8 +23,6 @@ There are F-Bus adapters that plug into the battery area of a phone. This has po
 - Set of adapters that are just PCBs with contacts and mayer level shifters that connect to a standard FTDI cable.
 - Put the whole Arduino in the battery compartment. The Arduino communicates with the phone over F-Bus and also to overther devices on the F-Bus.
 
-- Do we need a diode on the F-Bus TX line? See [http://www.greenwhitetech.co/gsm_tech5.php](http://www.greenwhitetech.co/gsm_tech5.php)
-
 ## Communication steps
 There are three steps.
 
@@ -38,59 +36,76 @@ If source does not acknowledge phone, phone sends feedback again, repeat, repeat
 
 Message breakdown:
 
-
+```
 { FrameID, DestDEV, SrcDEV, MsgType, 0x00, FrameLength, {block}, FramesToGo,
       SeqNo, PaddingByte?, ChkSum1, ChkSum2 }
-- Byte 00: FrameID
-  - 0x1E: Any frame sent by the cable
-  - 0x1C: Any frame sent by the IRDA port
-- Byte 01: DestDEV
+     
+Byte, Name
+00 FrameID
+  - 0x1E: Any frame sent via cable
+  - 0x1C: Any frame sent via IRDA port
+01 DestDEV
   - 0x00: Mobile phone
   - 0x0C: PC/uC
-- Byte 02: SrcDEV
+02 SrcDEV
   - 0x00: Mobile phone
   - 0x0C: PC/uC
-- Byte 03: MsgType
-  - 0x1B: Get HW & SW version
-- Byte 04: FrameLength MSB
-  - 0x00: Will always be this value. Gnokii F-Bus docs leave it as 0x00
-- Bytes 05: FrameLength LSB
+03 MsgType
+  - 0x1B: Get HW & SW version (on Nokia 3100)
+  - Depends on the phone used
+  - Depends on the command
+  - See Gnokii documentation
+04 FrameLength MSB
+  - 0x00: If FrameLength LSB is 0xFF or less
+  - Gnokii F-Bus docs leave it as 0x00
+05 FrameLength LSB
   - Number of bytes from Byte 06 to Byte N-3
-- Byte 06: ??
+06 ??
   - 0x00: For non-acknowledgement packets
   - First byte in **FrameLength**
-- Byte 07: ??
+07 ??
   - 0x01: For non-acknowledgement packets
-- Byte 08: ??
+08 ??
   - 0x00: For non-acknowledgement packets
-- Byte 09 to N-4: Command byte 1
-  - First command byte. See documentation
-- Byte N-3: SeqNo
+09 to N-5 {block}
+  - This is the comand block
+  - Depends on the phone used
+  - Depends on the command
+  - See Gnokii documentation
+N-4 FramesToGo
+  - 0x01: If this message is the last frame
+  - The number of frames remaining the message including this one
+N-3 SeqNo
+  - 0x40: First frame
   - 0xXY format
+  - X is usually 4
   - Y is 0-7
   - For each new message we write we incriment the SeqNo
-  - The phone returns component Y (e.g. 0x0Y, (0xXY & 0x07)) in the acknowledgement packet
+  - The phone returns component Y (e.g. 0x0Y, which is 0xXY & 0x07) in the acknowledgement packet
   - Last byte in **FrameLength**
-- Byte N-2: PaddingByte?
+N-2 PaddingByte?
   - 0x00: If byte N-3 is odd
   - If byte N-2 is even, do not add padding byte
-- Byte N-1: ChkSum1
+N-1 ChkSum1
   - XOR all odd bytes (1, 3, 5, etc.)
-- Byte N: ChkSum2
+  - Note: ChkSum1 and ChkSum2 can be calculated together as a 16-bit XOR
+N ChkSum2
   - XOR all even bytes (2, 4, 6, etc.)
+  - Note: ChkSum1 and ChkSum2 can be calculated together as a 16-bit XOR
+```
 
 ```
 Example (get HW&SW):  
+      ID DD SD MT FL FL |<<<<<<<frame>>>>>>|    CS CS  
 Byte: 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
 Data: 1E 00 0C D1 00 07 00 01 00 03 00 01 60 00 72 D5
-      ID DD SD MT FL FL |<<<<<<<frame>>>>>>|    CS CS
 
 For Nokia 3100? (get HW&SW):  
+      ID DD SD MT FL FL |<<<<<<<frame>>>>>>| PD CS CS  
 Byte: 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15
 Data: 1E 00 0C 1B 00 07 00 01 00 07 00 01 00 00
-      ID DD SD MT FL FL |<<<<<<<frame>>>>>>| PD CS CS
-
 ```
+
 `XX` is the command  
 `YY` Calculate message length  
 `ZZZZZZ` Data. Pad if necessary  
@@ -130,6 +145,7 @@ Use cases:
 - A microcontroller takes readings every ten minutes. Every hour the microcontroller averagest those readings and texts them to a phone number.
 - Microcontroller is logging data. Peridotically it sends text messages to a server with the data.
 - Microcontroller receives text message and controlls something based on those messages.
+- My bank sends me an online banking access code while traveling. The device receives the texted code locally then texts the code to the phone I have while travelling. It may also send an email to me.
 
 
 ## Random notes
