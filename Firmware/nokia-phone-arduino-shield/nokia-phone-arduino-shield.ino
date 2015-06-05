@@ -20,33 +20,31 @@
 #include "FBus.h"
 
 //AltSoftSerial mySerial;
-SoftwareSerial mySerial(8, 9); // RX, TX
+SoftwareSerial mySerial(3, 2); // RX, TX
 
-FBus myPhone(&mySerial);
-
-#define DEBUG            0 // Debugging code: 0 disable, 1 enable
-// Creates a funciton for printing to serial during debugging.
-#if DEBUG
-    #define DEBUG_PRINT(x)    Serial.print (x)
-    #define DEBUG_PRINTLN(x)  Serial.println (x)
-#else
-    #define DEBUG_PRINT(x)
-    #define DEBUG_PRINTLN(x)
-#endif
+FBus myPhone(&Serial);
+//FBus debug(&mySerial);
 
 void setup() {
+    
+    pinMode(8, INPUT); 
+    pinMode(9, INPUT);
+    
     Serial.begin(115200);
     delay(200);
     
-    mySerial.begin(115200);
+    mySerial.begin(19200);
     delay(200);
 }
     
 void loop() {
-    Serial.print("SW version: ");Serial.println(myPhone.softwareVersion());
-//    Serial.print("HW version: ");Serial.println(myPhone.hardwareVersion());
-//    Serial.print("Date code: ");Serial.println(myPhone.dateCode());
-//    Serial.println();
+    mySerial.write("START");
+    myPhone.initializeBus();
+    delay(1);
+    myPhone.serialFlush();
+    myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type
+    myPhone.getPacket();
+    myPhone.getPacket();
     delay(2000);
 }
 

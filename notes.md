@@ -36,10 +36,11 @@ If source does not acknowledge phone, phone sends feedback again, repeat, repeat
 
 Message breakdown:
 
+
 ```
 { FrameID, DestDEV, SrcDEV, MsgType, 0x00, FrameLength, {block}, FramesToGo,
       SeqNo, PaddingByte?, ChkSum1, ChkSum2 }
-     
+
 Byte, Name
 00 FrameID
   - 0x1E: Any frame sent via cable
@@ -159,6 +160,57 @@ Use cases:
 - It looks like the message I compose using the gnokii docs from git is different from what I see gnokii transmitting. I'll have to get better data when the new boards some in.
 - Try to design things such that the uC does not have to store large values. Process and pack items as they come in. checksumOdd() and checksumEven() can be called as a message is being made. Then we only need to store the result in memeory.
 - According to InsideGadgets, "After lots of testing, I found that you should firstly send 128 ‘U’, then send the request for the HW&SW command and then send the SMS."
+
+```
+getPacket () {  // private
+    // Assumes the next batch of data is a packet
+    // The serial input buffer does not need to be flushed
+    // This function must loop until a packet is found and read completely or timeout occurs
+    int oddCheckSum = 0, evenCheckSum = 0;
+    1. Read the serial buffer until bytes 0-2 match
+    2. Write bytes 0-2 to header[]
+    3. Write bytes 3-5 to header[]
+    4. Checksum header[]
+    5. Process body: next header[5] bytes
+       - Read the next byte
+       - write byte to body[]
+       - checksum byte
+    6. if ( sizeof(body) is odd ) { write next 3 bytes to footer }
+       else { write next 2 bytes to footer }
+    7. Verify packet integrity
+       - if ( oddChecksum == footer[ sizeof(footer) - 2 ] &&
+             evenCheckSum == footer[ sizeof(footer) - 1 ] ) { 
+             // Send acknowledgement
+         }
+    8. Send acknowledgement
+    return msgType, 
+}
+```
+
+Pass body[] to appropriate function as dictated by byte 03 MsgType
+
+- The bytes in body[0] to body[2] are trashed
+- The bytes body[3] to body[ sizeof(body) - 2 ]
+- The bytes body[ sizeof(body) - 2 ] is FramesToGo
+- The bytes body[ sizeof(body) - 1 ] is SeqNo
+
+
+```
+sendAck(byte* &body[]) {  // private
+    // construct and send acknowledgement packet
+}
+    
+```
+
+
+
+
+
+
+
+
+
+
 
 
 

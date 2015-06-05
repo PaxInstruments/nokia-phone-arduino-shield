@@ -15,90 +15,214 @@ FBus::FBus(Stream *serialPort) {
     _serialPort = serialPort;
 }
 
-FBus::FBus(Stream *serialPort, int SMSCenter) {
-    _serialPort = serialPort;
-    _SMSCenter = SMSCenter;
-}
-
-void FBus::initializeBus() {// Perpares phone to receice F-Bus messages
+void FBus::initializeBus() {  // Perpares phone to receice F-Bus messages
     for (int i = 0; i < 128; i++) {
         _serialPort->write(0x55);
     }
+    _serialPort->flush();
 }
 
-String FBus::softwareVersion() {
-    initializeBus();
-    delay(1);
-    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
-    _serialPort->write(hwsw,sizeof(hwsw));
-    char incomingMessage[200];
-    //delay(50);
-    for (int i = 0; _serialPort->available() > 0; i++) {
-        char incomingByte = _serialPort->read();
-        if (incomingByte == 'V') {
-            i = 0;
-        }
-        incomingMessage[i] = incomingByte;
-    }
-    char softwareVersion[5];
-    for (int j = 0; j < sizeof(softwareVersion); j++) {
-        softwareVersion[j] = incomingMessage[j+2];
-    }
-    return softwareVersion;
+void FBus::sendPacket(byte MsgType) {
+    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
+    _serialPort->write(0x1E);  // FrameID: Cable
+    _serialPort->write((byte)0x00);  // DestDEV: Phone
+    _serialPort->write(0x0C);  // SrcDEV: PC
+    _serialPort->write(MsgType);  // MsgType, depends on phone model
+    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
+    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
+    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
+    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
+    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
+    _serialPort->write((byte)0x00);  // padAndChecksum
+    _serialPort->write(0x72);  // padAndChecksum
+    _serialPort->write(0xD5);  // padAndChecksum
+    
+    _serialPort->flush();
 }
 
-String FBus::hardwareVersion() {
-    initializeBus();
-    delay(1);
-    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
-    _serialPort->write(hwsw,sizeof(hwsw));
-    char incomingMessage[200];
-    //delay(50);
-    for (int i = 0; _serialPort->available() > 0; i++) {
-        char incomingByte = _serialPort->read();
-        if (incomingByte == 'V') {
-            i = 0;
-        }
-        incomingMessage[i] = incomingByte;
+void FBus::getPacket () {
+    // Assumes the next batch of data is a packet
+    // The serial input buffer does not need to be flushed
+    // This function must loop until a packet is found and read completely or timeout occurs
+    int oddCheckSum = 0, evenCheckSum = 0;
+    // Read the serial buffer until bytes 0-2 match
+    byte header[6] = {};
+    while ( _serialPort->available() < 6) {}
+    header[0] = _serialPort->read();
+    header[1] = _serialPort->read();
+    header[2] = _serialPort->read();
+    header[3] = _serialPort->read();  // MsgType
+    header[4] = _serialPort->read();  // FrameLength MSB
+    header[5] = _serialPort->read();  // FrameLength LSB
+    _serialPort->write( header, sizeof(header) );
+    while ( _serialPort->available() < header[5] + (header[5] & 0x01) + 2 )  {
+        //_serialPort->write(_serialPort->available());
+        //_serialPort->write(header[5]);
     }
-    char hardwareVersion[5];
-    for (int j = 0; j < sizeof(hardwareVersion); j++) {
-        hardwareVersion[j] = incomingMessage[j+22];
+    for (byte i = 0x00; i < header[5] + 2; i++) {
+        _serialPort->write( _serialPort->read() );
     }
-    return hardwareVersion;
+//    if ( _serialPort->available() >= header[5] ) {
+//        pulse();pulse();pulse();
+//    }
+//}
+//    2. Write bytes 0-2 to header[]
+//    3. Write bytes 3-5 to header[]
+//    4. Checksum header[]
+//    5. Process body: next header[5] bytes
+//       - Read the next byte
+//       - write byte to body[]
+//       - checksum byte
+//    6. if ( sizeof(body) is odd ) { write next 3 bytes to footer }
+//       else { write next 2 bytes to footer }
+//    7. Verify packet integrity
+//       - if ( oddChecksum == footer[ sizeof(footer) - 2 ] &&
+//             evenCheckSum == footer[ sizeof(footer) - 1 ] ) { 
+//             // Send acknowledgement
+//         }
+//    8. Send acknowledgement
+//    return msgType, 
 }
 
-String FBus::dateCode() {
-    initializeBus();
-    delay(1);
-    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
-    _serialPort->write(hwsw,sizeof(hwsw));
-    char incomingMessage[200];
-    //delay(50);
-    for (int i = 0; _serialPort->available() > 0; i++) {
-        char incomingByte = _serialPort->read();
-        if (incomingByte == 'V') {
-            i = 0;
-        }
-        incomingMessage[i] = incomingByte;
+void FBus::serialFlush(){
+    while(Serial.available() > 0) {
+        _serialPort->read();
     }
-    char dateCode[8];
-    for (int j = 0; j < sizeof(dateCode); j++) {
-        dateCode[j] = incomingMessage[j+16];
-    }
-    return dateCode;
 }
 
-char FBus::checksumOdd() {
-  // Go through the message array and outout an XOR of the odd numbered bytes.
-  // The first byte in the array is odd. This shoudl work both sending and receiving.
+void FBus::sendTest() {  // Send a raw HWSW request.
+    byte hwsw[] = { 0x1E, 0x00, 0x0C, 
+                    0xD1, 0x00, 0x07, 
+                    0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 
+                    0x00, 0x72, 0xD5 };
+    _serialPort->write( hwsw, sizeof(hwsw) );
 }
 
-char FBus::checksumEven() {
-  // Go through the message array and outout an XOR of the even numbered bytes.
-  // The first byte in the array is odd. This shoudl work both sending and receiving.
-  
-}
+//void FBus::listener() { // Watch serial stream for packet header
+//    byte header[6] = {};
+//    byte firstByte;
+//    byte secondByte;
+//    byte incomingByte;
+//    if ( _serialPort->available() >= 6 && header[0] == 0x00 ) {
+//        while (_serialPort->available() > 0) {
+//            firstByte = secondByte;
+//            secondByte = incomingByte;
+//            incomingByte = _serialPort->read();
+//            if ( firstByte == 0x1e && secondByte == 0x0c && incomingByte ==0x00 ) {
+//                pulse();
+//                header[0] = firstByte;
+//                header[1] = secondByte;
+//                header[2] = incomingByte;
+//                header[3] = _serialPort->read();  // MsgType
+//                header[4] = _serialPort->read();  // FrameLength MSB
+//                header[5] = _serialPort->read();  // FrameLength LSB
+//                Serial.write(header,sizeof(header));
+//            }
+//        }
+//    }
+//    if ( _serialPort->available() >= header[5] ) {
+//        pulse();pulse();pulse();
+//    }
+//}
+//
+//void FBus::serialFlush(){
+//  while(Serial.available() > 0) {
+//    _serialPort->read();
+//  }
+//}
+//
+//void FBus::pulse() {
+//    digitalWrite(2, HIGH);
+//    digitalWrite(3, HIGH);
+//    digitalWrite(2, LOW);
+//    digitalWrite(3, LOW);
+//    digitalWrite(2, HIGH);
+//    digitalWrite(3, HIGH);
+//    digitalWrite(2, LOW);
+//    digitalWrite(3, LOW);
+//    digitalWrite(2, HIGH);
+//    digitalWrite(3, HIGH);
+//}
+
+//FBus::FBus(Stream *serialPort, int SMSCenter) {
+//    _serialPort = serialPort;
+//    _SMSCenter = SMSCenter;
+//}
+
+//String FBus::softwareVersion() {
+//    initializeBus();
+//    delay(1);
+//    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
+//    _serialPort->write(hwsw,sizeof(hwsw));
+//    _serialPort->flush();
+//    char incomingMessage[200];
+//    //delay(50);
+//    for (int i = 0; _serialPort->available() > 0; i++) {
+//        char incomingByte = _serialPort->read();
+//        if (incomingByte == 'V') {
+//            i = 0;
+//        }
+//        incomingMessage[i] = incomingByte;
+//    }
+//    char softwareVersion[5];
+//    for (int j = 0; j < sizeof(softwareVersion); j++) {
+//        softwareVersion[j] = incomingMessage[j+2];
+//    }
+//    return softwareVersion;
+//}
+//
+//String FBus::hardwareVersion() {
+//    initializeBus();
+//    delay(1);
+//    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
+//    _serialPort->write(hwsw,sizeof(hwsw));
+//    char incomingMessage[200];
+//    //delay(50);
+//    for (int i = 0; _serialPort->available() > 0; i++) {
+//        char incomingByte = _serialPort->read();
+//        if (incomingByte == 'V') {
+//            i = 0;
+//        }
+//        incomingMessage[i] = incomingByte;
+//    }
+//    char hardwareVersion[5];
+//    for (int j = 0; j < sizeof(hardwareVersion); j++) {
+//        hardwareVersion[j] = incomingMessage[j+22];
+//    }
+//    return hardwareVersion;
+//}
+//
+//String FBus::dateCode() {
+//    initializeBus();
+//    delay(1);
+//    byte hwsw[] = { 0x1E, 0x00, 0x0C, 0xD1, 0x00, 0x07, 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00, 0x72, 0xD5 }; // get HW and SW info
+//    _serialPort->write(hwsw,sizeof(hwsw));
+//    char incomingMessage[200];
+//    //delay(50);
+//    for (int i = 0; _serialPort->available() > 0; i++) {
+//        char incomingByte = _serialPort->read();
+//        if (incomingByte == 'V') {
+//            i = 0;
+//        }
+//        incomingMessage[i] = incomingByte;
+//    }
+//    char dateCode[8];
+//    for (int j = 0; j < sizeof(dateCode); j++) {
+//        dateCode[j] = incomingMessage[j+16];
+//    }
+//    return dateCode;
+//}
+//
+//char FBus::checksumOdd() {
+//  // Go through the message array and outout an XOR of the odd numbered bytes.
+//  // The first byte in the array is odd. This shoudl work both sending and receiving.
+//}
+
+//char FBus::checksumEven() {
+//  // Go through the message array and outout an XOR of the even numbered bytes.
+//  // The first byte in the array is odd. This shoudl work both sending and receiving.
+//  
+//}
 
 /*
 0x02: SMS HANDLING

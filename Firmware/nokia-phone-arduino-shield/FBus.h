@@ -13,24 +13,31 @@
 class FBus {
     public:
         FBus(Stream *serialPort);
-        FBus(Stream *serialPort, int SMSCenter);
+            void initializeBus();  // Perpares phone to receice F-Bus messages
+            void sendTest();  // Send a raw HWSW request.
+            void sendPacket(byte MsgType);  // Send a packet with the specified messag
+            void getPacket();
+            void serialFlush();
+//        void listener();
+//        void pulse();  // Used for debugging
+//        void serialFlush();
+//        FBus(Stream *serialPort, int SMSCenter);
 //        FBus(Stream *serialPort, int SMSCenter)  // Create FBus object, set SMS Center number
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
-    	String softwareVersion();
-    	String hardwareVersion();
-    	String dateCode();
+//    	String softwareVersion();
+//    	String hardwareVersion();
+//    	String dateCode();
 //        char frameID
 //        char destination
 //        char source
     private:
         Stream* _serialPort;
-        int _SMSCenter;
-        void initializeBus();
-        char checksumOdd();
-        char checksumEven();
+//        int _SMSCenter;
+//        char checksumOdd();
+//        char checksumEven();
 //        FBus::acknowledge()
 };
 
