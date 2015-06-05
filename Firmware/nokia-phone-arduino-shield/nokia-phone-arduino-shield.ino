@@ -43,8 +43,9 @@ void loop() {
     delay(1);
     myPhone.serialFlush();
     myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type
-    myPhone.getPacket();
-    myPhone.getPacket();
-    delay(2000);
+    myPhone.getPacket();  // Receive acknowledgement
+    myPhone.getPacket();  // Receive information
+//    myPhone.sendAck();
+    delay(500);
 }
 
