@@ -18,6 +18,7 @@ class FBus {
             void sendPacket(byte MsgType);  // Send a packet with the specified messag
             void getPacket();
             void serialFlush();
+            byte* checkSum();
 //        void listener();
 //        void pulse();  // Used for debugging
 //        void serialFlush();

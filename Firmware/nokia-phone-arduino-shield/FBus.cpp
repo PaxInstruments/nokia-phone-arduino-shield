@@ -54,18 +54,22 @@ void FBus::getPacket () {
     header[3] = _serialPort->read();  // MsgType
     header[4] = _serialPort->read();  // FrameLength MSB
     header[5] = _serialPort->read();  // FrameLength LSB
-    _serialPort->write( header, sizeof(header) );
-    while ( _serialPort->available() < header[5] + (header[5] & 0x01) + 2 )  {
-        //_serialPort->write(_serialPort->available());
-        //_serialPort->write(header[5]);
+    int packetLength = sizeof(header) + header[5] + (header[5] & 0x01) + 2;
+    byte packet[ packetLength ];
+    for (int i = 0; i < sizeof(header); i++) {
+        packet[i] = header[i];
     }
-    for (byte i = 0x00; i < header[5] + 2; i++) {
-        _serialPort->write( _serialPort->read() );
+    while ( _serialPort->available() < sizeof(packet) - sizeof(header) )  {
     }
-//    if ( _serialPort->available() >= header[5] ) {
-//        pulse();pulse();pulse();
-//    }
-//}
+    for (byte i = sizeof(header); i < sizeof(packet); i++) {
+       packet[i] = _serialPort->read();
+    }
+    for ( int i = 0; i <= packetLength-4; i += 2) {
+        oddCheckSum ^= packet[i];
+        evenCheckSum ^= packet[i+1];
+    }
+    _serialPort->write( packet,sizeof(packet) );
+}
 //    2. Write bytes 0-2 to header[]
 //    3. Write bytes 3-5 to header[]
 //    4. Checksum header[]
@@ -82,7 +86,6 @@ void FBus::getPacket () {
 //         }
 //    8. Send acknowledgement
 //    return msgType, 
-}
 
 void FBus::serialFlush(){
     while(Serial.available() > 0) {
