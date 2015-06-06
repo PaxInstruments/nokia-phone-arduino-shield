@@ -13,12 +13,12 @@
 class FBus {
     public:
         FBus(Stream *serialPort);
-            void initializeBus();  // Perpares phone to receice F-Bus messages
-            void sendTest();  // Send a raw HWSW request.
-            void sendPacket(byte MsgType);  // Send a packet with the specified messag
-            void getPacket();
-            void serialFlush();
-            void sendAck(byte MsgType, byte SeqNo );
+        void initializeBus();  // Perpares phone to receice F-Bus messages
+        void sendPacket(byte MsgType);  // Send a packet with the specified messag
+        void getPacket();
+        void serialFlush();
+        void sendAck(byte MsgType, byte SeqNo );
+        void sendSMS(byte MsgType);
 //        void listener();
 //        void pulse();  // Used for debugging
 //        void serialFlush();

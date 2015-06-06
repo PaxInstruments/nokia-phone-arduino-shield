@@ -12,54 +12,112 @@
 #include "FBus.h"
 
 FBus::FBus(Stream *serialPort) {
-  _serialPort = serialPort;
+    _serialPort = serialPort;
 }
 
 void FBus::initializeBus() {  // Perpares phone to receice F-Bus messages
-  for (int i = 0; i < 128; i++) {
-    _serialPort->write(0x55);
-  }
-  _serialPort->flush();
+    for (int i = 0; i < 128; i++) {
+      _serialPort->write(0x55);
+    }
+    _serialPort->flush();
 }
+
+void FBus::sendSMS(byte MsgType) {
+    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
+    _serialPort->write(0x1E);  // FrameID: Cable
+    _serialPort->write((byte)0x00);  // DestDEV: Phone
+    _serialPort->write(0x0C);  // SrcDEV: PC
+    _serialPort->write(MsgType);  // MsgType, depends on phone model
+    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
+    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
+    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
+    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
+    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
+    _serialPort->write((byte)0x00);  // padAndChecksum
+    _serialPort->write(0x72);  // padAndChecksum
+    _serialPort->write(0xD5);  // padAndChecksum
+  
+    _serialPort->flush();
+}
+
 
 void FBus::sendPacket(byte MsgType) {
-  char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
-  _serialPort->write(0x1E);  // FrameID: Cable
-  _serialPort->write((byte)0x00);  // DestDEV: Phone
-  _serialPort->write(0x0C);  // SrcDEV: PC
-  _serialPort->write(MsgType);  // MsgType, depends on phone model
-  _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
-  _serialPort->write(0x07);  // FrameLengthLSB, depends on message
-  _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
-  _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
-  _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
-  _serialPort->write((byte)0x00);  // padAndChecksum
-  _serialPort->write(0x72);  // padAndChecksum
-  _serialPort->write(0xD5);  // padAndChecksum
-
-  _serialPort->flush();
+    byte oddCheckSum = 0x00;
+    byte evenCheckSum = 0x00;
+    byte header[] = { 0x1E, (byte)0x00, 0x0C, MsgType, (byte)0x00, 0x07 };
+    byte body[] = { 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00 };
+    byte packet[ sizeof(header) + sizeof(body) + (sizeof(body) & 0x01) + 2 ];
+    for ( int i = 0; i < sizeof(header); i++) {
+        packet[i] = header[i];
+    }
+    for ( int i = 0; i < sizeof(body); i++) {
+        packet[i + sizeof(header)] = body[i];
+    }
+    for ( int i = 0; i < sizeof(packet); i++) {
+        packet[i + sizeof(header) + sizeof(body)] = 0x00;
+    }
+    for ( int i = 0; i < sizeof(packet) - 2; i += 2) {
+//        _serialPort->write( 0xA1 );
+//        _serialPort->write( oddCheckSum );
+//        _serialPort->write( evenCheckSum );
+//        _serialPort->write( 0xB1 );
+//        _serialPort->write( packet[i] );
+//        _serialPort->write( packet[i+1] );
+        oddCheckSum ^= packet[i];
+        evenCheckSum ^= packet[i + 1];
+    }
+    _serialPort->write( 0xAA );
+    if (packet[5] & 0x01) {
+        packet[sizeof(packet) - 2 ] = oddCheckSum;
+        packet[sizeof(packet) - 1 ] = evenCheckSum;
+    }else {
+        packet[sizeof(packet) - 3 ] = oddCheckSum;
+        packet[sizeof(packet) - 2 ] = evenCheckSum;
+      
+    }
+    _serialPort->write( packet, sizeof(packet) );
+  
+    _serialPort->flush();
 }
 
+//void FBus::sendPacket(byte MsgType) {
+//    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
+//    _serialPort->write(0x1E);  // FrameID: Cable
+//    _serialPort->write((byte)0x00);  // DestDEV: Phone
+//    _serialPort->write(0x0C);  // SrcDEV: PC
+//    _serialPort->write(MsgType);  // MsgType, depends on phone model
+//    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
+//    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
+//    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
+//    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
+//    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
+//    _serialPort->write((byte)0x00);  // padAndChecksum
+//    _serialPort->write(0x72);  // padAndChecksum
+//    _serialPort->write(0xD5);  // padAndChecksum
+//  
+//    _serialPort->flush();
+//}
+
 void FBus::sendAck(byte MsgType, byte SeqNo ) {
-  int oddCheckSum = 0, evenCheckSum = 0;
-  byte ack[] = { 0x1E,   // FrameID: Cable
-                 0x00,   // DestDEV: Phone
-                 0x0C,   // SrcDEV: PC
-                 0x7F,   // MsgType: Ack, depends on phone model
-                 0x00,   // FrameLengthMSB, should always be 0x00
-                 0x02,   // FrameLengthLSB, should always be 0x00
-//                 0xD2,   //** The message type we are acknowledging
-                 MsgType,
-                 SeqNo & 0x07,   //** SegNo: <SeqNo from message> & 0x07
-                 0x00, 0x00  //** Checksums
-               };
+    int oddCheckSum = 0, evenCheckSum = 0;
+    byte ack[] = { 0x1E,   // FrameID: Cable
+                   0x00,   // DestDEV: Phone
+                   0x0C,   // SrcDEV: PC
+                   0x7F,   // MsgType: Ack, depends on phone model
+                   0x00,   // FrameLengthMSB, should always be 0x00
+                   0x02,   // FrameLengthLSB, should always be 0x00
+  //                 0xD2,   //** The message type we are acknowledging
+                   MsgType,
+                   SeqNo & 0x07,   //** SegNo: <SeqNo from message> & 0x07
+                   0x00, 0x00  //** Checksums
+                 };
     for ( int i = 0; i <= sizeof(ack) - 4; i += 2) {
         oddCheckSum ^= ack[i];
         evenCheckSum ^= ack[i + 1];
     }
     ack[sizeof(ack)-2] = oddCheckSum;
     ack[sizeof(ack)-1] = evenCheckSum;
-  _serialPort->write(ack, sizeof(ack));
+    _serialPort->write(ack, sizeof(ack));
 }
 
 void FBus::getPacket () {
@@ -67,7 +125,7 @@ void FBus::getPacket () {
     // The serial input buffer does not need to be flushed
     // This function must loop until a packet is found and read completely or timeout occurs
     int oddCheckSum = 0, evenCheckSum = 0;
-    // Read the serial buffer until bytes 0-2 match
+    // We should read the serial buffer until bytes 0-2 match
     byte header[6] = {};
     while ( _serialPort->available() < 6) {}
     header[0] = _serialPort->read();  // FrameID: Cable
@@ -96,85 +154,14 @@ void FBus::getPacket () {
       delay(1);
         sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
     }
-    //_serialPort->write( packet, sizeof(packet) );
+    //_serialPort->write( packet, sizeof(packet) );  // Good for debugging
 }
-//    2. Write bytes 0-2 to header[]
-//    3. Write bytes 3-5 to header[]
-//    4. Checksum header[]
-//    5. Process body: next header[5] bytes
-//       - Read the next byte
-//       - write byte to body[]
-//       - checksum byte
-//    6. if ( sizeof(body) is odd ) { write next 3 bytes to footer }
-//       else { write next 2 bytes to footer }
-//    7. Verify packet integrity
-//       - if ( oddChecksum == footer[ sizeof(footer) - 2 ] &&
-//             evenCheckSum == footer[ sizeof(footer) - 1 ] ) {
-//             // Send acknowledgement
-//         }
-//    8. Send acknowledgement
-//    return msgType,
 
 void FBus::serialFlush() {
   while (Serial.available() > 0) {
     _serialPort->read();
   }
 }
-
-void FBus::sendTest() {  // Send a raw HWSW request.
-  byte hwsw[] = { 0x1E, 0x00, 0x0C,
-                  0xD1, 0x00, 0x07,
-                  0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60,
-                  0x00, 0x72, 0xD5
-                };
-  _serialPort->write( hwsw, sizeof(hwsw) );
-}
-
-//void FBus::listener() { // Watch serial stream for packet header
-//    byte header[6] = {};
-//    byte firstByte;
-//    byte secondByte;
-//    byte incomingByte;
-//    if ( _serialPort->available() >= 6 && header[0] == 0x00 ) {
-//        while (_serialPort->available() > 0) {
-//            firstByte = secondByte;
-//            secondByte = incomingByte;
-//            incomingByte = _serialPort->read();
-//            if ( firstByte == 0x1e && secondByte == 0x0c && incomingByte ==0x00 ) {
-//                pulse();
-//                header[0] = firstByte;
-//                header[1] = secondByte;
-//                header[2] = incomingByte;
-//                header[3] = _serialPort->read();  // MsgType
-//                header[4] = _serialPort->read();  // FrameLength MSB
-//                header[5] = _serialPort->read();  // FrameLength LSB
-//                Serial.write(header,sizeof(header));
-//            }
-//        }
-//    }
-//    if ( _serialPort->available() >= header[5] ) {
-//        pulse();pulse();pulse();
-//    }
-//}
-//
-//void FBus::serialFlush(){
-//  while(Serial.available() > 0) {
-//    _serialPort->read();
-//  }
-//}
-//
-//void FBus::pulse() {
-//    digitalWrite(2, HIGH);
-//    digitalWrite(3, HIGH);
-//    digitalWrite(2, LOW);
-//    digitalWrite(3, LOW);
-//    digitalWrite(2, HIGH);
-//    digitalWrite(3, HIGH);
-//    digitalWrite(2, LOW);
-//    digitalWrite(3, LOW);
-//    digitalWrite(2, HIGH);
-//    digitalWrite(3, HIGH);
-//}
 
 //FBus::FBus(Stream *serialPort, int SMSCenter) {
 //    _serialPort = serialPort;
