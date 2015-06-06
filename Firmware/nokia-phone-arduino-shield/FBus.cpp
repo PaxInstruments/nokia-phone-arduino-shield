@@ -1,14 +1,16 @@
-/*
-  fbus.cpp - Library for talking to an F-Bus device.
-  Created by Charles Pax for Pax Instruments, 2015-05-23
-  Please visit http://paxinstruments.com/products/
-  Released into the Public Domain
+//  fbus.cpp - Library for talking to an F-Bus device.
+//  Created by Charles Pax for Pax Instruments, 2015-05-23
+//  Please visit http://paxinstruments.com/products/
+//  Released into the Public Domain
+//  
+//  This library is designed for use with the Arduino Leonardo though
+//  it may work with other boards.
+//
+//  Call this by passing the pointer to a serial port:
+//  FBus fred(&Serial1);
 
-  Call this by passing the pointer to a serial port:
-  FBus fred(&altSerial);
-*/
-
-#define DEBUG  1  // 0 off, 1 on
+// Enable/disable serial debug output
+#define DEBUG  1  // 0 disable, 1 enable
 #if DEBUG
     #define DEBUG_PRINT(x)    Serial.print (x)
     #define DEBUG_PRINT_HEX(x)    Serial.print (x, HEX)
@@ -21,49 +23,69 @@
     #define DEBUG_WRITE(x)
 #endif
 
+// Include any necessary files
 #include "Arduino.h"
 #include "FBus.h"
 
 FBus::FBus(Stream *serialPort) {
+// Create the FBus object. Within the library we will reference the phone
+// by talking to the serial port to which it is connected. To write to the
+// serial port we use the command "_serialPort->write();" and to read we use 
+// the command "_serialPort->read()".
+//
+// TODO: none
     _serialPort = serialPort;
 }
 
-void FBus::initializeBus() {  // Perpares phone to receice F-Bus messages
+FBus::FBus(Stream *serialPort, int SMSCenter) {
+// Create the FBus object and define a known SMS Center number.
+//
+// TODO
+// - Implement the SMS Center features. We have nothing now.
+//
+    _serialPort = serialPort;
+    _SMSCenter = SMSCenter;
+}
+
+void FBus::initializeBus() {
+// Prepare the phone to receive F-Bus messages by sending a series of 128
+// ASCII "U" characters. An ASCII "U" is 0x55 in hexidecimal. In binary this
+// is 01010101. Basically, we send a long stream of zeros and ones.
+//
+// TODO: none
+    DEBUG_PRINT("Init: ");
     for (int i = 0; i < 128; i++) {
       _serialPort->write(0x55);
-    }
-    DEBUG_PRINTLN("Init: ");
-    for (int i = 0; i < 128; i++) {
-        DEBUG_WRITE(0x55);
+      DEBUG_WRITE(0x55);
     }
     DEBUG_PRINTLN();
-    _serialPort->flush();
+    
+    serialFlush();  // Clear out the serial input buffer
+    _serialPort->flush();  // Wait until serial output buffer is empty
 }
 
-void FBus::sendSMS(byte MsgType) {
-    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
-    _serialPort->write(0x1E);  // FrameID: Cable
-    _serialPort->write((byte)0x00);  // DestDEV: Phone
-    _serialPort->write(0x0C);  // SrcDEV: PC
-    _serialPort->write(MsgType);  // MsgType, depends on phone model
-    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
-    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
-    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
-    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
-    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
-    _serialPort->write((byte)0x00);  // padAndChecksum
-    _serialPort->write(0x72);  // padAndChecksum
-    _serialPort->write(0xD5);  // padAndChecksum
-  
-    _serialPort->flush();
+void FBus::serialFlush() {
+// Clear out the serial input buffer
+//
+// TODO:
+// - Return when flush is complete. Function calls should wait while
+//   serialFlush()  operates.
+  while (Serial.available() > 0) {
+    _serialPort->read();
+  }
 }
-
 
 void FBus::sendPacket(byte MsgType) {
-    byte oddCheckSum = 0x00;
-    byte evenCheckSum = 0x00;
+// Send a packet
+//
+// TODO
+// - Generate SeqNo dynamically
+// - Lookup command blocks based on MsgType
+//
     byte header[] = { 0x1E, (byte)0x00, 0x0C, MsgType, (byte)0x00, 0x07 };
     byte body[] = { 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00 };
+    byte oddCheckSum = 0x00;
+    byte evenCheckSum = 0x00;
     byte packet[ sizeof(header) + sizeof(body) + (sizeof(body) & 0x01) + 2 ];
     for ( int i = 0; i < sizeof(header); i++) {
         packet[i] = header[i];
@@ -87,7 +109,7 @@ void FBus::sendPacket(byte MsgType) {
       
     }
     _serialPort->write( packet, sizeof(packet) );
-    DEBUG_PRINT(">>>> ");
+    DEBUG_PRINT("msg >>> ");
     for(int i = 0; i < sizeof(packet); i++) {
         DEBUG_PRINT_HEX(packet[i]);
         DEBUG_PRINT(" ");
@@ -97,56 +119,51 @@ void FBus::sendPacket(byte MsgType) {
     _serialPort->flush();
 }
 
-//void FBus::sendPacket(byte MsgType) {
-//    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
-//    _serialPort->write(0x1E);  // FrameID: Cable
-//    _serialPort->write((byte)0x00);  // DestDEV: Phone
-//    _serialPort->write(0x0C);  // SrcDEV: PC
-//    _serialPort->write(MsgType);  // MsgType, depends on phone model
-//    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
-//    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
-//    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
-//    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
-//    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
-//    _serialPort->write((byte)0x00);  // padAndChecksum
-//    _serialPort->write(0x72);  // padAndChecksum
-//    _serialPort->write(0xD5);  // padAndChecksum
-//  
-//    _serialPort->flush();
-//}
-
 void FBus::sendAck(byte MsgType, byte SeqNo ) {
-    int oddCheckSum = 0, evenCheckSum = 0;
-    byte ack[] = { 0x1E,   // FrameID: Cable
-                   0x00,   // DestDEV: Phone
-                   0x0C,   // SrcDEV: PC
-                   0x7F,   // MsgType: Ack, depends on phone model
-                   0x00,   // FrameLengthMSB, should always be 0x00
-                   0x02,   // FrameLengthLSB, should always be 0x00
-  //                 0xD2,   //** The message type we are acknowledging
-                   MsgType,
-                   SeqNo & 0x07,   //** SegNo: <SeqNo from message> & 0x07
-                   0x00, 0x00  //** Checksums
+// Acknowledge a packet received from the phone by sending
+// an acknowledgement packet to the phone. We only need to know
+// the message type and sequence numbers of the received packet.
+//
+// TODO: none
+    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
+    byte ack[] = { 0x1E,  // FrameID: Cable (0x1E)
+                   0x00,  // DestDEV: Phone (0x00)
+                   0x0C,  // SrcDEV: PC (0x0C)
+                   0x7F,  // MsgType: Acknowledgement (0x7F)
+                   0x00,  // FrameLengthMSB, should always be 0x00
+                   0x02,  // FrameLengthLSB, should always be 0x00 for an ack packet
+                   MsgType,  // The message type we are acknowledging
+                   SeqNo & 0x07,  // SegNo: (<SeqNo from message> & 0x07). Sequence ranges from 0 through 7.
+                   oddCheckSum,  //  oddCheckSum is calculated later
+                   evenCheckSum   //  evenCheckSum is calculated later
                  };
-    for ( int i = 0; i <= sizeof(ack) - 4; i += 2) {
+    for ( int i = 0; i < sizeof(ack) - 2; i += 2) {
         oddCheckSum ^= ack[i];
         evenCheckSum ^= ack[i + 1];
     }
-    ack[sizeof(ack)-2] = oddCheckSum;
-    ack[sizeof(ack)-1] = evenCheckSum;
+    ack[8] = oddCheckSum;
+    ack[9] = evenCheckSum;
     _serialPort->write(ack, sizeof(ack));
-    DEBUG_PRINT(">>>> ");
+    DEBUG_PRINT("ack >>> ");
+    #if DEBUG
     for(int i = 0; i < sizeof(ack); i++) {
-        DEBUG_PRINT(ack[i]);
+        DEBUG_PRINT_HEX(ack[i]);
         DEBUG_PRINT(" ");
     }
+    #endif
     DEBUG_PRINTLN();
 }
 
 void FBus::getPacket () {
-    // Assumes the next batch of data is a packet
-    // The serial input buffer does not need to be flushed
-    // This function must loop until a packet is found and read completely or timeout occurs
+// Get the next incoming packet.
+//
+// TODO
+// - Search for header match. Don't assume the next batch of data is a packet.
+// - Loop until a packet is found and read completely or timeout occurs
+// - Maybe there is a serial interrupt we can hook into
+// - Deal with packets larger than the serial buffer plus header
+// - BUG: We can only process packets less than or equal to  70 bytes (header + serial input buffer size).
+//
     int oddCheckSum = 0, evenCheckSum = 0;
     // We should read the serial buffer until bytes 0-2 match
     byte header[6] = {};
@@ -158,7 +175,7 @@ void FBus::getPacket () {
     header[4] = _serialPort->read();  // FrameLength MSB
     header[5] = _serialPort->read();  // FrameLength LSB
     int packetLength = sizeof(header) + header[5] + (header[5] & 0x01) + 2;
-    byte packet[ packetLength ];
+    byte packet[ packetLength ];  // Create array to hold entire packet
     for (int i = 0; i < sizeof(header); i++) {
         packet[i] = header[i];
     }
@@ -173,30 +190,52 @@ void FBus::getPacket () {
     }
     byte MsgType = packet[3];
     byte SegNo = packet[ packetLength - 3 - (header[5] & 0x01) ];
-    DEBUG_PRINT("<<<< ");
-    for(int i = 0; i < sizeof(packet); i++) {
-        DEBUG_PRINT_HEX(packet[i]);
-        DEBUG_PRINT(" ");
-    }
-    DEBUG_PRINTLN();
-    if ( packet[3] != 0x7F) {
-      delay(1);
-        sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
-    }
     
-    //_serialPort->write( packet, sizeof(packet) );  // Good for debugging
+    if ( packet[3] != 0x7F) {
+        DEBUG_PRINT("<<< msg ");
+        #if DEBUG
+        for(int i = 0; i < sizeof(packet); i++) {
+            DEBUG_PRINT_HEX(packet[i]);
+            DEBUG_PRINT(" ");
+        }
+        #endif
+        DEBUG_PRINTLN();
+        delay(1);
+        sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
+    }else {
+        DEBUG_PRINT("<<< ack ");
+        #if DEBUG
+        for(int i = 0; i < sizeof(packet); i++) {
+            DEBUG_PRINT_HEX(packet[i]);
+            DEBUG_PRINT(" ");
+        }
+        #endif
+        DEBUG_PRINTLN();
+    }
 }
 
-void FBus::serialFlush() {
-  while (Serial.available() > 0) {
-    _serialPort->read();
-  }
+void FBus::sendSMS(byte MsgType) {
+// Send an arbitrary SMS message.
+//
+// TODO
+// - Write this funciton. This is fully hardcoded.
+//
+    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
+    _serialPort->write(0x1E);  // FrameID: Cable
+    _serialPort->write((byte)0x00);  // DestDEV: Phone
+    _serialPort->write(0x0C);  // SrcDEV: PC
+    _serialPort->write(MsgType);  // MsgType, depends on phone model
+    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
+    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
+    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends on MsgType and phone model
+    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
+    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
+    _serialPort->write((byte)0x00);  // padAndChecksum
+    _serialPort->write(0x72);  // padAndChecksum
+    _serialPort->write(0xD5);  // padAndChecksum
+  
+    _serialPort->flush();
 }
-
-//FBus::FBus(Stream *serialPort, int SMSCenter) {
-//    _serialPort = serialPort;
-//    _SMSCenter = SMSCenter;
-//}
 
 //String FBus::softwareVersion() {
 //    initializeBus();
@@ -260,17 +299,6 @@ void FBus::serialFlush() {
 //        dateCode[j] = incomingMessage[j+16];
 //    }
 //    return dateCode;
-//}
-//
-//char FBus::checksumOdd() {
-//  // Go through the message array and outout an XOR of the odd numbered bytes.
-//  // The first byte in the array is odd. This shoudl work both sending and receiving.
-//}
-
-//char FBus::checksumEven() {
-//  // Go through the message array and outout an XOR of the even numbered bytes.
-//  // The first byte in the array is odd. This shoudl work both sending and receiving.
-//
 //}
 
 /*

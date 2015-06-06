@@ -1,24 +1,14 @@
 #include <SoftwareSerial.h>
 #include "FBus.h"
 
-//SoftwareSerial mySerial(3, 2); // RX, TX
-
 FBus myPhone(&Serial1);
 
 void setup() {
-    
-    pinMode(8, INPUT); 
-    pinMode(9, INPUT);
-    
-    Serial1.begin(115200);
-    delay(200);
-    
-    Serial.begin(115200);
-    delay(200);
+    Serial.begin(115200);  // Start the serial link to PC
+    Serial1.begin(115200);  // Start the serial link to Phone
 }
     
 void loop() {
-    //Serial.println("START");
     myPhone.initializeBus();
     delay(1);
     myPhone.serialFlush();
