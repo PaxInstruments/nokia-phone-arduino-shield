@@ -8,6 +8,19 @@
   FBus fred(&altSerial);
 */
 
+#define DEBUG  1  // 0 off, 1 on
+#if DEBUG
+    #define DEBUG_PRINT(x)    Serial.print (x)
+    #define DEBUG_PRINT_HEX(x)    Serial.print (x, HEX)
+    #define DEBUG_PRINTLN(x)  Serial.println (x)
+    #define DEBUG_WRITE(x)  Serial.write (x)
+#else
+    #define DEBUG_PRINT(x)
+    #define DEBUG_PRINT_HEX(x)
+    #define DEBUG_PRINTLN(x)
+    #define DEBUG_WRITE(x)
+#endif
+
 #include "Arduino.h"
 #include "FBus.h"
 
@@ -19,6 +32,11 @@ void FBus::initializeBus() {  // Perpares phone to receice F-Bus messages
     for (int i = 0; i < 128; i++) {
       _serialPort->write(0x55);
     }
+    DEBUG_PRINTLN("Init: ");
+    for (int i = 0; i < 128; i++) {
+        DEBUG_WRITE(0x55);
+    }
+    DEBUG_PRINTLN();
     _serialPort->flush();
 }
 
@@ -57,16 +75,9 @@ void FBus::sendPacket(byte MsgType) {
         packet[i + sizeof(header) + sizeof(body)] = 0x00;
     }
     for ( int i = 0; i < sizeof(packet) - 2; i += 2) {
-//        _serialPort->write( 0xA1 );
-//        _serialPort->write( oddCheckSum );
-//        _serialPort->write( evenCheckSum );
-//        _serialPort->write( 0xB1 );
-//        _serialPort->write( packet[i] );
-//        _serialPort->write( packet[i+1] );
         oddCheckSum ^= packet[i];
         evenCheckSum ^= packet[i + 1];
     }
-    _serialPort->write( 0xAA );
     if (packet[5] & 0x01) {
         packet[sizeof(packet) - 2 ] = oddCheckSum;
         packet[sizeof(packet) - 1 ] = evenCheckSum;
@@ -76,6 +87,12 @@ void FBus::sendPacket(byte MsgType) {
       
     }
     _serialPort->write( packet, sizeof(packet) );
+    DEBUG_PRINT(">>>> ");
+    for(int i = 0; i < sizeof(packet); i++) {
+        DEBUG_PRINT_HEX(packet[i]);
+        DEBUG_PRINT(" ");
+    }
+    DEBUG_PRINTLN();
   
     _serialPort->flush();
 }
@@ -118,6 +135,12 @@ void FBus::sendAck(byte MsgType, byte SeqNo ) {
     ack[sizeof(ack)-2] = oddCheckSum;
     ack[sizeof(ack)-1] = evenCheckSum;
     _serialPort->write(ack, sizeof(ack));
+    DEBUG_PRINT(">>>> ");
+    for(int i = 0; i < sizeof(ack); i++) {
+        DEBUG_PRINT(ack[i]);
+        DEBUG_PRINT(" ");
+    }
+    DEBUG_PRINTLN();
 }
 
 void FBus::getPacket () {
@@ -150,10 +173,17 @@ void FBus::getPacket () {
     }
     byte MsgType = packet[3];
     byte SegNo = packet[ packetLength - 3 - (header[5] & 0x01) ];
+    DEBUG_PRINT("<<<< ");
+    for(int i = 0; i < sizeof(packet); i++) {
+        DEBUG_PRINT_HEX(packet[i]);
+        DEBUG_PRINT(" ");
+    }
+    DEBUG_PRINTLN();
     if ( packet[3] != 0x7F) {
       delay(1);
         sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
     }
+    
     //_serialPort->write( packet, sizeof(packet) );  // Good for debugging
 }
 
