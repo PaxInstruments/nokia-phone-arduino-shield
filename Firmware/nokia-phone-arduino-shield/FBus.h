@@ -19,6 +19,8 @@ class FBus {
         void getPacket();
         void serialFlush();  // Empty the serial input buffer
         void sendSMS(byte MsgType);
+        void serialInterrupt();
+        void processIncomingBytes();
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone

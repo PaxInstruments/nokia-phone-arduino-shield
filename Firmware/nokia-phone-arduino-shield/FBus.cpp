@@ -28,6 +28,23 @@
     #define DEBUG_WRITE(x)
 #endif
 
+// FrameID values
+#define CABLE 0x1E
+#define IRDA 0x1C
+// DestDEV, SrcDEV values
+#define PHONE 0x00
+#define HOST 0x0C
+// MsgType
+#define REQ_HWSW 0x1D  // Request hardward and software information
+// FrameLength
+#define FRAME_LENGTH_MAX 0xFF  // TODO: What is the maximum frame length?
+#define FRAME_LENGTH_MIN 0x00  // TODO: What is the minimum frame length?
+#define FRAME_LENGTH_MSB 0x00
+
+
+
+
+
 // Include any necessary files
 #include "Arduino.h"
 #include "FBus.h"
@@ -242,4 +259,168 @@ void FBus::sendSMS(byte MsgType) {
     _serialPort->flush();
 }
 
+//
+//  From here down we're working on the bite-wise processing
+//
+
+void FBus::serialInterrupt() {
+// Execute this function on serial input interrupt
+    while ( _serialPort->available() ) {
+        //processIncomingByte();
+    }
+}
+
+typedef struct { 
+    byte FrameID;
+    byte DestDEV;
+    byte SrcDEV;
+    byte MsgType;
+    byte FrameLengthMSB;
+    byte FrameLengthLSB;
+    byte* block; // Points to the command block array
+    byte FramesToGo; // Calculated number of remaining frames
+    byte SeqNo; // Calculated as previous SeqNo++
+//    PaddingByte?, // Include this byte if FrameLength is odd
+    byte oddChecksum;
+    byte evenChecksum;
+} packet;
+
+byte outgoingFieldIndex = 0;
+byte outgoingBlockIndex = 0;
+byte outgoingByte;
+packet outgoingPacket;
+
+byte incomingFieldIndex = 0;
+byte incomingBlockIndex = 0;
+byte incomingByte;
+packet incomingPacket;
+
+void FBus::processIncomingBytes() {
+// Process each incomingByte in serial input buffer. As we cycle throught the first
+// three bytes we make sure each ones matches the expected values of a packet
+// addressed to us. We trash bytes until we see the first three bytes of a packet
+// header, then we assume the rest is a packet.
+//
+// packet { FrameID, DestDEV, SrcDEV, MsgType, FrameLengthMSB, FrameLengthLSB, {block}, FramesToGo,
+//      SeqNo, PaddingByte?, oddCheckSum, evenCheckSum }
+//
+// TODO
+// - Add a watchdog timer to this. Reset fieldIndex to zero if no change after a while
+// - Put this in the Arduino library
+// - Make a struct that uses this
+// - Trigger using a serial input interrupt. See http://stackoverflow.com/questions/10201590/arduino-serial-interrupts
+//
+    switch (incomingFieldIndex) { // oddCheckSum ^= packet
+        case 0:
+            incomingPacket.FrameID = _serialPort->read();
+            if ( incomingPacket.FrameID != CABLE) break;
+            incomingPacket.oddChecksum = FRAME_LENGTH_MSB;
+            incomingPacket.oddChecksum ^= incomingPacket.FrameID;
+            incomingFieldIndex++;
+            break;
+        case 1:
+          incomingPacket.DestDEV = _serialPort->read();
+          if ( incomingPacket.DestDEV != HOST) {
+              incomingFieldIndex = 0;
+              break;
+          }
+          incomingPacket.evenChecksum = 0x00;
+          incomingPacket.evenChecksum ^= incomingPacket.DestDEV;
+          incomingFieldIndex++;
+          break;
+        case 2:
+          incomingPacket.SrcDEV = _serialPort->read();
+          if ( incomingPacket.SrcDEV != PHONE) {
+              incomingFieldIndex = 0;
+              break;
+          }
+          incomingPacket.oddChecksum ^= incomingPacket.SrcDEV;
+          incomingFieldIndex++;
+          break;
+        case 3:
+          incomingPacket.MsgType = _serialPort->read();
+          incomingPacket.evenChecksum ^= incomingPacket.MsgType;
+          incomingFieldIndex++;
+          break;
+        case 4:
+          incomingPacket.FrameLengthMSB = _serialPort->read();
+          if (incomingPacket.FrameLengthMSB != FRAME_LENGTH_MSB) {
+                // Throw an error
+                incomingFieldIndex = 0;  // Trash packet and start over
+                break;
+            }
+          incomingPacket.oddChecksum ^= incomingPacket.FrameLengthMSB;
+          incomingFieldIndex++;
+          break;
+        case 5:
+            incomingPacket.FrameLengthLSB = _serialPort->read();
+            if (incomingPacket.FrameLengthLSB > FRAME_LENGTH_MAX ) {
+                // Throw an error
+                incomingFieldIndex = 0;  // Trash packet and start over
+                incomingBlockIndex = 0;
+                break;
+            } else if (incomingPacket.FrameLengthLSB < FRAME_LENGTH_MIN ) {
+                // Throw an error
+                incomingFieldIndex = 0;  // Trash packet and start over
+                incomingBlockIndex = 0;
+                break;
+            }
+            incomingPacket.evenChecksum ^= incomingPacket.FrameLengthLSB;
+            incomingFieldIndex++;
+            break;
+        case 6:
+            // Process the block
+            incomingFieldIndex++;
+            break;
+        case 7:
+            incomingPacket.FramesToGo = _serialPort->read();
+            // Checksum odd/even is conditional based on incomingPacket.FrameLengthLSB
+            // Run checksum maybe using (incomingPacket.FrameLengthLSB & 0x01)
+            incomingFieldIndex++;
+            break;
+        case 8:
+            incomingPacket.SeqNo = _serialPort->read();  // Last byte in FrameLength
+            // Checksum odd/even is conditional based on incomingPacket.FrameLengthLSB
+            // Run checksum maybe using (incomingPacket.FrameLengthLSB & 0x01)
+            incomingFieldIndex++;
+            break;
+        case 9:
+        // From here to the end we are working with the checksums. We do an XOR of the
+        // checksums the phone gives us against the checksums we calculated. If they are
+        // the same, the results will be 0x00.
+            if ( incomingPacket.FrameLengthLSB & 0x01 ) {
+                _serialPort->read();  // Trash padding byte
+            } else {
+                incomingPacket.oddChecksum ^= _serialPort->read();
+            }
+            incomingFieldIndex++;
+            break;
+//        case 10:
+            if ( incomingPacket.FrameLengthLSB & 0x01 ) {
+                incomingPacket.oddChecksum ^= _serialPort->read();
+            } else {
+                incomingPacket.evenChecksum ^= _serialPort->read();
+            }
+            incomingFieldIndex++;
+            break;
+        case 11:
+            if ( incomingPacket.FrameLengthLSB & 0x01 ) {
+                incomingPacket.evenChecksum ^= _serialPort->read();
+            }
+            if ( incomingPacket.oddChecksum || incomingPacket.evenChecksum ) {
+            // Throw an error if the delivered and calculated checksums are not the same
+                // Bad packet!
+                // Throw checksum error
+                incomingFieldIndex = 0;  // Trash packet and start over
+                incomingBlockIndex = 0;
+                break;
+            }
+            // Packet complete.
+            // Do something.
+            break;
+        default: 
+            break;
+          // We should never get here. Throw error
+  }
+}
 
