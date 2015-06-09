@@ -32,8 +32,9 @@ void setup() {
 }
     
 void loop() {
-    mySerial.print("OK");
-    Serial.println("OK");
+    //mySerial.print("OK");
+    //Serial.println("OK");
+    Serial.println();
     myPhone.initializeBus();
     delay(1);
     myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type

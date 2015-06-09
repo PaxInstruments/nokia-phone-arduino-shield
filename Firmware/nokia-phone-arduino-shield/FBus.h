@@ -44,6 +44,7 @@ class FBus {
         void printPacket(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
         int packetOkay(packet *_packet, byte oddChecksum, byte evenChecksum);
+        void checksum(packet *_packet, byte inputByte);
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
