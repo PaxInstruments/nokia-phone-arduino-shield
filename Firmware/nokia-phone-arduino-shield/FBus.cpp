@@ -71,36 +71,20 @@ void FBus::serialFlush() {  // Clear out the serial input buffer.
 }
 
 void FBus::serialInterrupt() {
- //   packet incomingPacket;
-// Execute this function on serial input interrupt
-}
-
-int FBus::getIncomingPacket() {
-    Serial.print(incomingPacket.oddChecksum, HEX);
-    Serial.print(" ");
-    Serial.print(incomingPacket.evenChecksum, HEX);
- //   packet incomingPacket;
-    for ( byte i = 0xA0; _serialPort->available(); i++) {
-        _serialPort->write(incomingPacket.fieldIndex);
-        processIncomingByte(&incomingPacket);
- //       _serialPort->write(incomingPacket.oddChecksum);
- //       _serialPort->write(incomingPacket.evenChecksum);
-        _serialPort->write(0x88);
-    }
-    _serialPort->write(0x99);
-    printPacket(&incomingPacket);
-    return 0;
+    //   packet incomingPacket;
+    // Executethis function on serial input interrupt
 }
 
 void FBus::printPacket(packet *_packet) {
-    //_serialPort->write(_packet->fieldIndex);
-    //_serialPort->write(_packet->blockIndex);
     _serialPort->write(_packet->FrameID);
     _serialPort->write(_packet->DestDEV);
     _serialPort->write(_packet->SrcDEV);
     _serialPort->write(_packet->MsgType);
     _serialPort->write(_packet->FrameLengthMSB);
     _serialPort->write(_packet->FrameLengthLSB);
+//    for ( byte i = 0x00; i < _packet->FrameLengthLSB - 2; i++ ) {
+//        _serialPort->write(_packet->block[i]);
+//    }
     _serialPort->write(_packet->oddChecksum);
     _serialPort->write(_packet->evenChecksum);
 }
@@ -115,57 +99,66 @@ void FBus::packetReset(packet *_packet) {
     _packet->MsgType = 0x00;
     _packet->FrameLengthMSB = 0x00;
     _packet->FrameLengthLSB = 0x00;
-    _packet->ChkSum1 = 0x00;
-    _packet->ChkSum2 = 0x00;
+    for ( byte i = 0x00; i < sizeof(_packet->block); i++ ) {
+        _packet->block[i] = 0x00;
+    }
     _packet->oddChecksum = 0x00;
     _packet->evenChecksum = 0x00;
 }
 
-int FBus::packetOkay(packet *_packet, byte ChkSum1, byte ChkSum2) {
-    if ( _packet->oddChecksum || _packet->evenChecksum ) {
-        // TODO: Throw a bad checksum error
-        _serialPort->write(0x96);
-        packetReset(_packet);
-    } else if ( _packet->MsgType == ACK_MSG ) {
-        // TODO: Remove sent message from the stack
-        _serialPort->write(0x69);
+int FBus::checksum(packet *_packet) {
+    // Verify the checksum of a packet.
+    byte oddChecksum, evenChecksum = 0x00;
+    oddChecksum ^= _packet->FrameID;
+    evenChecksum ^= _packet->DestDEV;
+    oddChecksum ^= _packet->SrcDEV;
+    evenChecksum ^= _packet->MsgType;
+    oddChecksum ^= _packet->FrameLengthMSB;
+    evenChecksum ^= _packet->FrameLengthLSB;
+    for ( byte i = 0x00; i < sizeof(_packet->block); i += 2 ) {
+        oddChecksum ^= _packet->block[i];
+    }
+    for ( byte i = 0x01; i < sizeof(_packet->block); i += 2 ) {
+        evenChecksum ^= _packet->block[i];
+    }
+    if ( _packet->FrameLengthLSB & 0x01 ) {
+        evenChecksum ^= _packet->FramesToGo;
+        oddChecksum ^= _packet->SeqNo;
     } else {
-        //sendAck( _packet->MsgType, _packet->SeqNo );
+        oddChecksum ^= _packet->FramesToGo;
+        evenChecksum ^= _packet->SeqNo;
+    }
+
+    if ( oddChecksum == _packet->oddChecksum && evenChecksum == _packet->evenChecksum ) {
+        _serialPort->write('O');
+        _serialPort->write('K');
+        return 1;
+    } else {
+        _serialPort->write('N');
+        _serialPort->write('G');
+        return 0;
     }
 }
 
-void FBus::checksum(packet *_packet, byte inputByte) {
-    // Use the current fieldIndex and blockIndex to xor the inputByte
-    // with the appropriate field.
-    if ( _packet->fieldIndex || _packet->blockIndex ) {
-        _packet->evenChecksum ^= inputByte;
-    } else {
-        _packet->oddChecksum ^= inputByte;
+packet* FBus::getIncomingPacket() {
+    packetReset(&incomingPacket);
+    while ( !incomingPacket.packetReady ) {  // TODO: Added a timeout function here
+        // DEBUG NTOES: 
+        // We get to here just fine
+        //_serialPort->write(0xD0);
+        // Repeats 0xD0 forever
+        if ( _serialPort->available() ) {
+            // DEBUG NOTES:
+            // We get here just fine
+            // _serialPort->write(0xD1);
+            // Appears to write 0xD1 while processing bytes
+            processIncomingByte(&incomingPacket);
+        }
     }
-    Serial.print(_packet->oddChecksum);
-    Serial.print(_packet->evenChecksum);
+    delay(1);
+    _serialPort->write(incomingPacket.packetReady);
+    return &incomingPacket;
 }
-
-//                  |---| odd body
-// pkt: 0 1 0 1 0 1 0 1 0 1 0 1 0 1
-// fid: 0 1 0 1 0 1 0 0 0 1 0 1 0 1
-// bid: 0 0 0 0 0 0 0 1 0 0 0 0 0 0 
-//
-//                  |-----| even body
-// pkt: 0 1 0 1 0 1 0 1 0 1 0 1 0 1
-// fid: 0 1 0 1 0 1 0 0 0 0 1 0 1 0
-// bid: 0 0 0 0 0 0 0 1 0 1 1 1 1 1
-//
-//
-//                  |---| odd body
-// pkt: 0 1 0 1 0 1 0 1 0 1 0 1 0 1
-// fid: 0 1 0 1 0 1 0 0 0 1 0 1 0 1
-// bid: 0 0 0 0 0 0 0 1 0 1 0 1 0 1
-//
-//                  |-----| even body
-// pkt: 0 1 0 1 0 1 0 1 0 1 0 1 0 1
-// fid: 0 1 0 1 0 1 0 0 0 0 1 0 1 0
-// bid: 0 0 0 0 0 0 0 1 0 1 0 0 0 0
 
 void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to the incomingPacket
 // packet { FrameID, DestDEV, SrcDEV, MsgType, FrameLengthMSB, FrameLengthLSB, {block}, FramesToGo,
@@ -177,10 +170,10 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
 // - Make a struct that uses this
 // - Trigger using a serial input interrupt. See http://stackoverflow.com/questions/10201590/arduino-serial-interrupts
 //
-
     switch (_packet->fieldIndex) { // oddCheckSum ^= packet
         case 0x00:  // FrameID
             _packet->FrameID = _serialPort->read();
+            //_serialPort->write(_packet->FrameID);
             if ( _packet->FrameID == CABLE) {
                 _packet->fieldIndex++;
             } else {
@@ -189,6 +182,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
         case 0x01:  // DestDEV
             _packet->DestDEV = _serialPort->read();
+            //_serialPort->write(_packet->DestDEV);
             if ( _packet->DestDEV == HOST) {
                 _packet->fieldIndex++;
             } else {
@@ -197,6 +191,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
         case 0x02:  // SrcDEV
             _packet->SrcDEV = _serialPort->read();
+            //_serialPort->write(_packet->SrcDEV);
             if ( _packet->SrcDEV == PHONE) {
                 _packet->fieldIndex++;
             } else {
@@ -206,6 +201,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
         case 0x03:  // MsgType
             // TODO: Verify MsgType is one we know
             _packet->MsgType = _serialPort->read();
+            //_serialPort->write(_packet->MsgType);
             if ( 1 ) {
                 _packet->fieldIndex++;
             } else {
@@ -215,6 +211,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
         case 0x04:  // FrameLengthMSB
             _packet->FrameLengthMSB = _serialPort->read();
+            //_serialPort->write(_packet->FrameLengthMSB);
             if ( _packet->FrameLengthMSB == 0x00 ) {
                 _packet->fieldIndex++;
             } else {
@@ -224,8 +221,8 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
         case 0x05:  // FrameLengthLSB
             _packet->FrameLengthLSB = _serialPort->read();
+            //_serialPort->write(_packet->FrameLengthLSB);
             if ( FRAME_LENGTH_MIN < _packet->FrameLengthLSB < FRAME_LENGTH_MAX ) {
-                _packet->block[_packet->FrameLengthLSB] = {};  // Declare the block size
                 _packet->fieldIndex++;
             } else {
                 // TODO: throw FrameLengthLSB our of range error
@@ -235,6 +232,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
         case 0x06:  // {block}
             // Process the block
             _packet->block[_packet->blockIndex] = _serialPort->read();
+            //_serialPort->write(_packet->block[_packet->blockIndex]);
             _packet->blockIndex++;
             if (_packet->blockIndex >= _packet->FrameLengthLSB - 3 ) {
                 _packet->fieldIndex++;
@@ -245,10 +243,12 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
         case 0x07:  // FramesToGo
             _packet->FramesToGo = _serialPort->read();
+            //_serialPort->write(_packet->FramesToGo);
             _packet->fieldIndex++;
             break;
         case 0x08:  // SeqNo. Last byte in FrameLength
             _packet->SeqNo = _serialPort->read();
+            //_serialPort->write(_packet->SeqNo);
             _packet->fieldIndex++;
             break;
         case 0x09:  // 0x00 or oddChecksum
@@ -256,21 +256,31 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
                 _serialPort->read();
             } else {
                 _packet->oddChecksum = _serialPort->read();
+                //_serialPort->write(_packet->oddChecksum);
             }
             _packet->fieldIndex++;
             break;
         case 0x0A:
             if (_packet->FrameLengthLSB & 0x01) {
                 _packet->oddChecksum = _serialPort->read();
-            } else {
+                //_serialPort->write(_packet->oddChecksum);
+            } else {  // Packet complete
                 _packet->evenChecksum = _serialPort->read();
-                // END OF PACKET!!!
+                //_serialPort->write(_packet->evenChecksum);
+                printPacket(_packet);
+                _packet->packetReady = checksum(_packet);
+                //sendAck( _packet->MsgType, _packet->SeqNo);
+                packetReset(_packet);
             }
             _packet->fieldIndex++;
             break;
-        case 0x0B:
+        case 0x0B:  // Packet complete
             _packet->evenChecksum = _serialPort->read();
-            // END OF PACKET!!!
+            //_serialPort->write(_packet->evenChecksum);
+            printPacket(_packet);
+            _packet->packetReady = checksum(_packet);
+        //    sendAck( _packet->MsgType, _packet->SeqNo);
+            packetReset(_packet);
             break;
         default: 
             break;

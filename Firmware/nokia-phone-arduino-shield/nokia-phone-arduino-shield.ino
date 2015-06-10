@@ -38,8 +38,9 @@ void loop() {
     myPhone.initializeBus();
     delay(1);
     myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type
-    delay(2);
+  //  delay(1);
     myPhone.getIncomingPacket();  // Should be the acknowledgement packet
+//    myPhone.printPacket(myPhone.getIncomingPacket());
 //    myPhone.getIncomingPacket();  // Should be the requested HWSW information
 //    myPhone.getPacket();  // Receive acknowledgement
 //    myPhone.getPacket();  // Receive information

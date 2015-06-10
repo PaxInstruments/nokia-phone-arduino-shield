@@ -20,12 +20,10 @@ typedef struct {
     byte MsgType = 0x00;
     byte FrameLengthMSB = 0x00;
     byte FrameLengthLSB = 0x00;
-    byte* block; // Points to the command block array
+    byte block[64] = {}; // Points to the command block array
     byte FramesToGo = 0x00; // Calculated number of remaining frames
     byte SeqNo = 0x00; // Calculated as previous SeqNo++
 //    PaddingByte?, // Include this byte if FrameLength is odd
-    byte ChkSum1 = 0x00;
-    byte ChkSum2 = 0x00;
     byte oddChecksum = 0x00;
     byte evenChecksum = 0x00;
 } packet;
@@ -40,11 +38,10 @@ class FBus {
         void sendSMS(byte MsgType);
         void serialInterrupt();
         void processIncomingByte(packet *incomingPacket);
-        int getIncomingPacket();
+        packet* getIncomingPacket();
         void printPacket(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
-        int packetOkay(packet *_packet, byte oddChecksum, byte evenChecksum);
-        void checksum(packet *_packet, byte inputByte);
+        int checksum(packet *_packet);
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
