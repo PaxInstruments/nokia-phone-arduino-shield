@@ -5,6 +5,10 @@
   Released into the Public Domain
 */
 
+// NOTES
+// - byte* SMS_pack(string text)
+// - string SMS_unpack(byte* textPacked)
+
 #ifndef FBus_h
 #define FBus_h
 
@@ -42,6 +46,8 @@ class FBus {
         void packetPrint(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
         void printTest(); // print the &incomingPacket
+        byte* SMS_pack(String text);
+        String SMS_unpack(byte* textPacked);
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone

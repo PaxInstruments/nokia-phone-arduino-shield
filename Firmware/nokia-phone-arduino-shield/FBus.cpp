@@ -436,3 +436,17 @@ void FBus::sendSMS(byte MsgType) {
   
     _serialPort->flush();
 }
+
+byte* FBus::SMS_pack(string text) {
+
+}
+
+string FBus::SMS_unpack(byte* textPacked) {
+    
+}
+
+
+
+
+
+
