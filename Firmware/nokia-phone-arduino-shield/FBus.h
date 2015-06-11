@@ -41,7 +41,6 @@ class FBus {
         packet* getIncomingPacket();
         void packetPrint(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
-        int checksum(packet *_packet);
         void printTest(); // print the &incomingPacket
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
@@ -56,7 +55,9 @@ class FBus {
     private:
         Stream* _serialPort;
         int _SMSCenter;
+        int checksum(packet *_packet);
         packet incomingPacket;
+        packet outgoingPacket;
         void serialFlush();  // Empty the serial input buffer
         void packetReset(packet *_packet);
 //        char checksumOdd();

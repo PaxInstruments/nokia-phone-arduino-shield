@@ -11,21 +11,6 @@
 //  FBus fred(&Serial1);
 //
 
-// Enable/disable serial debug output
-#define DEBUG  1  // 0 disable, 1 enable
-#if DEBUG
-    #define DEBUG_PRINT(x)  Serial.print (x)
-    #define DEBUG_PRINT_HEX(x)  Serial.print (x, HEX)
-    #define DEBUG_PRINTLN_HEX(x)  Serial.println (x, HEX)
-    #define DEBUG_PRINTLN(x)  Serial.println (x)
-    #define DEBUG_WRITE(x)  Serial.write (x)
-#else
-    #define DEBUG_PRINT(x)
-    #define DEBUG_PRINT_HEX(x)
-    #define DEBUG_PRINTLN(x)
-    #define DEBUG_WRITE(x)
-#endif
-
 // FrameID values
 #define CABLE 0x1E
 #define IRDA 0x1C
@@ -357,25 +342,8 @@ void FBus::getPacket () {  // Get the next incoming packet.
     byte SegNo = packet[ packetLength - 3 - (header[5] & 0x01) ];
     
     if ( packet[3] != 0x7F) {
-        DEBUG_PRINT("<<< msg ");
-        #if DEBUG
-        for(int i = 0; i < sizeof(packet); i++) {
-            DEBUG_PRINT_HEX(packet[i]);
-            DEBUG_PRINT(" ");
-        }
-        #endif
-        DEBUG_PRINTLN();
         delay(1);
         sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
-    }else {
-        DEBUG_PRINT("<<< ack ");
-        #if DEBUG
-        for(int i = 0; i < sizeof(packet); i++) {
-            DEBUG_PRINT_HEX(packet[i]);
-            DEBUG_PRINT(" ");
-        }
-        #endif
-        DEBUG_PRINTLN();
     }
 }
 
@@ -414,13 +382,8 @@ void FBus::sendPacket(byte MsgType) {// Send a packet.
       
     }
     _serialPort->write( packet, sizeof(packet) );
-    DEBUG_PRINT("msg >>> ");
     for(int i = 0; i < sizeof(packet); i++) {
-        DEBUG_PRINT_HEX(packet[i]);
-        DEBUG_PRINT(" ");
     }
-    DEBUG_PRINTLN();
-  
     _serialPort->flush();
 }
 
@@ -448,14 +411,6 @@ void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
     ack[8] = oddCheckSum;
     ack[9] = evenCheckSum;
     _serialPort->write(ack, sizeof(ack));
-    DEBUG_PRINT("ack >>> ");
-    #if DEBUG
-    for(int i = 0; i < sizeof(ack); i++) {
-        DEBUG_PRINT_HEX(ack[i]);
-        DEBUG_PRINT(" ");
-    }
-    #endif
-    DEBUG_PRINTLN();
 }
 
 void FBus::sendSMS(byte MsgType) {
