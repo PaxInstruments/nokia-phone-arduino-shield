@@ -34,6 +34,8 @@ void loop() {
 //    myPhone.sendPacket(0xD1);
     myPhone.getIncomingPacket();
     myPhone.getIncomingPacket();
-    delay(10);
+    Serial.println(myPhone.versionHW());
+    Serial.println(myPhone.versionSW());
+    delay(1000);
 }
 

@@ -144,6 +144,24 @@ int FBus::checksum(packet *_packet) {
     }
 }
 
+String FBus::versionHW() {
+    // TODO
+    // - Get the HW version number
+    // - Write HW and SW version to global variables
+    //  - Return global HW version
+
+    return "RH-19";
+}
+
+String FBus::versionSW() {
+    // TODO
+    // - Get the HW version number
+    // - Write HW and SW version to global variables
+    //  - Return global HW version
+    
+    return "v 4.5";
+}
+
 void FBus::printTest() {
     packet* _packet = &incomingPacket;
     _packet->fieldIndex = 0x00;

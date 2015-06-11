@@ -106,3 +106,26 @@ Data: 1E 00 0C D1 00 07 00 01 00 03 00 01 60 00 72 D5
 - It looks like the message I compose using the gnokii docs from git is different from what I see gnokii transmitting. I'll have to get better data when the new boards some in.
 - Try to design things such that the uC does not have to store large values. Process and pack items as they come in. checksumOdd() and checksumEven() can be called as a message is being made. Then we only need to store the result in memeory.
 - According to InsideGadgets, "After lots of testing, I found that you should firstly send 128 ‘U’, then send the request for the HW&SW command and then send the SMS."
+
+## Checksum process
+
+Step
+A0 1E 00
+A1 1E OC 
+A2 1E 0C
+A3 1E 73
+A4 1E 73
+A5 1E 71
+A6 CF 71
+A7 CF 71
+A8 
+A9 
+AA 
+
+
+
+
+
+
+
+

@@ -45,6 +45,8 @@ class FBus {
         void printTest(); // print the &incomingPacket
         byte* SMS_pack(String text);
         String SMS_unpack(byte* textPacked);
+        String versionHW();
+        String versionSW();
     private:
         Stream* _serialPort;
         int _SMSCenter;
