@@ -34,12 +34,15 @@ void setup() {
 void loop() {
     //mySerial.print("OK");
     //Serial.println("OK");
-    Serial.println();
+ //   Serial.println();
     myPhone.initializeBus();
     delay(1);
+ //   myPhone.printTest();
     myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type
   //  delay(1);
-    myPhone.getIncomingPacket();  // Should be the acknowledgement packet
+    //myPhone.packetPrint( myPhone.getIncomingPacket() );  // Should be the acknowledgement packet
+    myPhone.getIncomingPacket();
+    myPhone.getIncomingPacket();
 //    myPhone.printPacket(myPhone.getIncomingPacket());
 //    myPhone.getIncomingPacket();  // Should be the requested HWSW information
 //    myPhone.getPacket();  // Receive acknowledgement

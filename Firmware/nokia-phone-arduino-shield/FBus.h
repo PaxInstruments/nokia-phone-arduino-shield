@@ -39,9 +39,10 @@ class FBus {
         void serialInterrupt();
         void processIncomingByte(packet *incomingPacket);
         packet* getIncomingPacket();
-        void printPacket(packet *_packet);
+        void packetPrint(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
         int checksum(packet *_packet);
+        void printTest(); // print the &incomingPacket
 //        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
 //        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
 //        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
