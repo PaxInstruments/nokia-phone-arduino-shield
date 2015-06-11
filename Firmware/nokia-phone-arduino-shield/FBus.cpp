@@ -60,7 +60,7 @@ void FBus::serialInterrupt() {
     // Executethis function on serial input interrupt
 }
 
-void FBus::packetPrint(packet *_packet) {
+void FBus::packetSend(packet *_packet) {
     _serialPort->write(_packet->FrameID);
     _serialPort->write(_packet->DestDEV);
     _serialPort->write(_packet->SrcDEV);
@@ -75,11 +75,11 @@ void FBus::packetPrint(packet *_packet) {
         for ( byte i = 0x00; i < _packet->FrameLengthLSB - 2; i++ ) {
             _serialPort->write(_packet->block[i]);
         }
+        _serialPort->write(_packet->FramesToGo);
+        _serialPort->write(_packet->SeqNo);
         if (_packet->FrameLengthLSB & 0x01) {
             _serialPort->write((byte)0x00);
         }
-        _serialPort->write(_packet->FramesToGo);
-        _serialPort->write(_packet->SeqNo);
     }
     _serialPort->write(_packet->oddChecksum);
     _serialPort->write(_packet->evenChecksum);
@@ -138,6 +138,8 @@ int FBus::checksum(packet *_packet) {
     if ( oddChecksum == _packet->oddChecksum && evenChecksum == _packet->evenChecksum ) {
         return 1;
     } else {
+        _packet->oddChecksum = oddChecksum;
+        _packet->evenChecksum = evenChecksum;
         return 0;
     }
 }
@@ -160,7 +162,7 @@ void FBus::printTest() {
     _packet->SeqNo = 0xD7;
     _packet->oddChecksum = 0xD8;
     _packet->evenChecksum = 0xD9;
-    packetPrint(&incomingPacket);
+    packetSend(&incomingPacket);
 }
 
 packet* FBus::getIncomingPacket() {
@@ -291,6 +293,30 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
             break;
             // We should never get here. Throw error
   }
+}
+
+packet* FBus::requestHWSW() {
+    packetReset( &outgoingPacket );
+    // Request HWSW information packet
+    outgoingPacket.fieldIndex = 0x00;
+    outgoingPacket.blockIndex = 0x00;
+    outgoingPacket.packetReady = 0;
+    outgoingPacket.FrameID = 0x1E;
+    outgoingPacket.DestDEV = 0x00;
+    outgoingPacket.SrcDEV = 0x0C;
+    outgoingPacket.MsgType = 0xD1;
+    outgoingPacket.FrameLengthMSB = 0x00;
+    outgoingPacket.FrameLengthLSB = 0x07;
+    byte block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
+    for (int i=0; i<sizeof(block); i++) {
+        outgoingPacket.block[i] = block[i];
+    }
+    outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
+    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
+//    PaddingByte?, // Include this byte if FrameLength is odd
+    checksum(&outgoingPacket);
+    packetSend( &outgoingPacket );
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -437,13 +463,6 @@ void FBus::sendSMS(byte MsgType) {
     _serialPort->flush();
 }
 
-byte* FBus::SMS_pack(string text) {
-
-}
-
-string FBus::SMS_unpack(byte* textPacked) {
-    
-}
 
 
 

@@ -30,7 +30,8 @@ void setup() {
 void loop() {
     myPhone.initializeBus();
     delay(1);
-    myPhone.sendPacket(0xD1);  // Send a raw HWSW request. Only supported type
+    myPhone.requestHWSW();
+//    myPhone.sendPacket(0xD1);
     myPhone.getIncomingPacket();
     myPhone.getIncomingPacket();
     delay(10);

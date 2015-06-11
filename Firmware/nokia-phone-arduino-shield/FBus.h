@@ -5,10 +5,6 @@
   Released into the Public Domain
 */
 
-// NOTES
-// - byte* SMS_pack(string text)
-// - string SMS_unpack(byte* textPacked)
-
 #ifndef FBus_h
 #define FBus_h
 
@@ -43,21 +39,12 @@ class FBus {
         void serialInterrupt();
         void processIncomingByte(packet *incomingPacket);
         packet* getIncomingPacket();
-        void packetPrint(packet *_packet);
+        packet* requestHWSW();
+        void packetSend(packet *_packet);
         void sendAck(byte MsgType, byte SeqNo );
         void printTest(); // print the &incomingPacket
         byte* SMS_pack(String text);
         String SMS_unpack(byte* textPacked);
-//        FBus::setSMSC(int SMSCenterNumber)  // Set SMS Center number
-//        FBus::messageSend(int recipientNumber, String "someMessage)  // Send message to a number
-//        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
-//        FBus::sendFrame(char* arbitraryMessage)  // Send an arbitrary frame to phone
-//    	String softwareVersion();
-//    	String hardwareVersion();
-//    	String dateCode();
-//        char frameID
-//        char destination
-//        char source
     private:
         Stream* _serialPort;
         int _SMSCenter;
@@ -66,9 +53,6 @@ class FBus {
         packet outgoingPacket;
         void serialFlush();  // Empty the serial input buffer
         void packetReset(packet *_packet);
-//        char checksumOdd();
-//        char checksumEven();
-//        FBus::acknowledge()
 };
 
 #endif
