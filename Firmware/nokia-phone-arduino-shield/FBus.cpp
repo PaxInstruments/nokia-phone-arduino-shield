@@ -314,40 +314,6 @@ void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
     packetSend( &outgoingPacket );    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
 }
 
-//////////////////////////////////////////////////////////////////////////////////////
-//                                                                                  //
-// Below here is the old functions that are not based on the packet structure. They //
-// can stay here during development of this library, but should be removed once the //
-// packet structure stuff is complete.                                              //
-//                                                                                  //
-//////////////////////////////////////////////////////////////////////////////////////
-
-void FBus::sendSMS(byte MsgType) {
-// Send an arbitrary SMS message.
-//
-// TODO
-// - Write this funciton. This is fully hardcoded. It doesn't even work.
-//
-    char HWSW_block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
-    _serialPort->write(0x1E);  // FrameID: Cable
-    _serialPort->write((byte)0x00);  // DestDEV: Phone
-    _serialPort->write(0x0C);  // SrcDEV: PC
-    _serialPort->write(MsgType);  // MsgType, depends on phone model
-    _serialPort->write((byte)0x00);  // FrameLengthMSB, should always be 0x00
-    _serialPort->write(0x07);  // FrameLengthLSB, depends on message
-    _serialPort->write( HWSW_block, sizeof(HWSW_block) );  // getBlock(MsgType), depends
-                                                           // on MsgType and phone model
-    _serialPort->write(0x01);  // FramesToGo, how many packets are left in this message
-    _serialPort->write(0x60);  // SeqNo = (previous SeqNo + 1) ^ 0x07
-    _serialPort->write((byte)0x00);  // padAndChecksum
-    _serialPort->write(0x72);  // padAndChecksum
-    _serialPort->write(0xD5);  // padAndChecksum
-  
-    _serialPort->flush();
-}
-
-
-
 
 
 

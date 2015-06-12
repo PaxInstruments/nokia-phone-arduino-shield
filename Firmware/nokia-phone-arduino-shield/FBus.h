@@ -40,9 +40,6 @@ class FBus {
         String versionSW(); // Set SW_version using requestHWSW()
         String HW_version; // Phone hardware version
         String SW_version; // Phone software version
-        //
-        //
-        void sendSMS(byte MsgType);  // OBSOLETE. Hard coded packet from tutorial
     private:
         void processIncomingByte(packet *incomingPacket); // Byte-wise process the data stream
         Stream* _serialPort; // Serial port attached to phone
