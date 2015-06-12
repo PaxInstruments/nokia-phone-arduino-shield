@@ -29,19 +29,11 @@
 #include "Arduino.h"
 #include "FBus.h"
 
-FBus::FBus(Stream *serialPort) {  // Create the FBus object
+FBus::FBus(Stream *serialPort) { // Create FBus object
     _serialPort = serialPort;
 }
 
-FBus::FBus(Stream *serialPort, int SMSCenter) {  // Create FBus object with SMSCenter number
-// TODO
-// - Implement the SMS Center features. We have nothing now.
-//
-    _serialPort = serialPort;
-    _SMSCenter = SMSCenter;
-}
-
-void FBus::initializeBus() {  // Prepare the phone to receive F-Bus messages
+void FBus::initializeBus() { // Prepare phone for communication
     serialFlush();
     for (int i = 0; i < 128; i++) {
       _serialPort->write(0x55);
@@ -49,18 +41,13 @@ void FBus::initializeBus() {  // Prepare the phone to receive F-Bus messages
     _serialPort->flush();
 }
 
-void FBus::serialFlush() {  // Clear out the serial input buffer.
+void FBus::serialFlush() { // Empty the serial input buffer
   while (Serial.available() > 0) {
     _serialPort->read();
   }
 }
 
-void FBus::serialInterrupt() {
-    //   packet incomingPacket;
-    // Executethis function on serial input interrupt
-}
-
-void FBus::packetSend(packet *_packet) {
+void FBus::packetSend(packet *_packet) { // Send a packet
     _serialPort->write(_packet->FrameID);
     _serialPort->write(_packet->DestDEV);
     _serialPort->write(_packet->SrcDEV);
@@ -85,7 +72,7 @@ void FBus::packetSend(packet *_packet) {
     _serialPort->write(_packet->evenChecksum);
 }
 
-void FBus::packetReset(packet *_packet) {
+void FBus::packetReset(packet *_packet) { // Reset al packet fields to 0x00
     _packet->fieldIndex = 0x00;
     _packet->blockIndex = 0x00;
     _packet->packetReady = 0;
@@ -104,8 +91,7 @@ void FBus::packetReset(packet *_packet) {
     _packet->evenChecksum = 0x00;
 }
 
-int FBus::checksum(packet *_packet) {
-    // Verify the checksum of a packet.
+int FBus::checksum(packet *_packet) { // Verify or add a checksum
     byte oddChecksum, evenChecksum = 0x00;
     oddChecksum ^= _packet->FrameID;
     evenChecksum ^= _packet->DestDEV;
@@ -144,7 +130,7 @@ int FBus::checksum(packet *_packet) {
     }
 }
 
-String FBus::versionHW() {
+String FBus::versionHW() { // Set HW_version using requestHWSW()
     // TODO
     // - Get the HW version number
     // - Write HW and SW version to global variables
@@ -153,7 +139,7 @@ String FBus::versionHW() {
     return "RH-19";
 }
 
-String FBus::versionSW() {
+String FBus::versionSW() { // Set SW_version using requestHWSW()
     // TODO
     // - Get the HW version number
     // - Write HW and SW version to global variables
@@ -162,28 +148,7 @@ String FBus::versionSW() {
     return "v 4.5";
 }
 
-void FBus::printTest() {
-    packet* _packet = &incomingPacket;
-    _packet->fieldIndex = 0x00;
-    _packet->blockIndex = 0x00;
-    _packet->packetReady = 0;
-    _packet->FrameID = 0xD0;
-    _packet->DestDEV = 0xD1;
-    _packet->SrcDEV = 0xD2;
-    _packet->MsgType = 0xD3;
-    _packet->FrameLengthMSB = 0xD4;
-    _packet->FrameLengthLSB = 0x05;
-    for ( byte i = 0x00; i < sizeof(_packet->block); i++ ) {
-        _packet->block[i] = 0xB0 + i;
-    }
-    _packet->FramesToGo = 0xD6;
-    _packet->SeqNo = 0xD7;
-    _packet->oddChecksum = 0xD8;
-    _packet->evenChecksum = 0xD9;
-    packetSend(&incomingPacket);
-}
-
-packet* FBus::getIncomingPacket() {
+packet* FBus::getIncomingPacket() { // Retreive the incoming packet
     packetReset(&incomingPacket);
     while ( !incomingPacket.packetReady ) {  // TODO: Added a timeout function here
         // DEBUG NTOES: 
@@ -204,10 +169,7 @@ packet* FBus::getIncomingPacket() {
     return &incomingPacket;
 }
 
-void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to the incomingPacket
-// packet { FrameID, DestDEV, SrcDEV, MsgType, FrameLengthMSB, FrameLengthLSB, {block}, FramesToGo,
-//      SeqNo, PaddingByte?, oddCheckSum, evenCheckSum }
-//
+void FBus::processIncomingByte(packet *_packet) { // Byte-wise process the data stream
 // TODO
 // - Add a watchdog timer to this. Reset fieldIndex to zero if no change after a while
 // - Put this in the Arduino library
@@ -313,7 +275,7 @@ void FBus::processIncomingByte(packet *_packet) {  // Add an incoming byte to th
   }
 }
 
-packet* FBus::requestHWSW() {
+packet* FBus::requestHWSW() { // Send HWSW request packet
     packetReset( &outgoingPacket );
     // Request HWSW information packet
     outgoingPacket.fieldIndex = 0x00;
@@ -334,7 +296,22 @@ packet* FBus::requestHWSW() {
 //    PaddingByte?, // Include this byte if FrameLength is odd
     checksum(&outgoingPacket);
     packetSend( &outgoingPacket );
+}
 
+void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
+    packetReset( &outgoingPacket );
+    outgoingPacket.FrameID = 0x1E;
+    outgoingPacket.DestDEV = 0x00;
+    outgoingPacket.SrcDEV = 0x0C;
+    outgoingPacket.MsgType = 0x7F;
+    outgoingPacket.FrameLengthMSB = 0x00;
+    outgoingPacket.FrameLengthLSB = 0x02;
+    byte block[] = { MsgType, SeqNo & 0x07 };
+    for (int i=0; i<sizeof(block); i++) {
+        outgoingPacket.block[i] = block[i];
+    }
+    checksum(&outgoingPacket);
+    packetSend( &outgoingPacket );    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -344,118 +321,6 @@ packet* FBus::requestHWSW() {
 // packet structure stuff is complete.                                              //
 //                                                                                  //
 //////////////////////////////////////////////////////////////////////////////////////
-
-void FBus::getPacket () {  // Get the next incoming packet.
-// NOTES
-// - This funtion is being replaced by processIncomingByte(), which is based on 
-//   the packet structure.
-//
-// TODO
-// - Search for header match. Don't assume the next batch of data is a packet.
-// - Loop until a packet is found and read completely or timeout occurs
-// - Maybe there is a serial interrupt we can hook into
-// - Deal with packets larger than the serial buffer plus header
-// - BUG: We can only process packets less than or equal to 70 bytes (header + serial
-//   input buffer size).
-//
-    int oddCheckSum = 0, evenCheckSum = 0;
-    // We should read the serial buffer until bytes 0-2 match
-    byte header[6] = {};
-    while ( _serialPort->available() < 6) {}
-    header[0] = _serialPort->read();  // FrameID: Cable
-    header[1] = _serialPort->read();  // DestDEV: PC
-    header[2] = _serialPort->read();  // SrcDEV: Phone
-    header[3] = _serialPort->read();  // MsgType
-    header[4] = _serialPort->read();  // FrameLength MSB
-    header[5] = _serialPort->read();  // FrameLength LSB
-    int packetLength = sizeof(header) + header[5] + (header[5] & 0x01) + 2;
-    byte packet[ packetLength ];  // Create array to hold entire packet
-    for (int i = 0; i < sizeof(header); i++) {
-        packet[i] = header[i];
-    }
-    while ( _serialPort->available() < sizeof(packet) - sizeof(header) )  {
-    }
-    for (byte i = sizeof(header); i < sizeof(packet); i++) {
-        packet[i] = _serialPort->read();
-    }
-    for ( int i = 0; i <= packetLength - 4; i += 2) {
-        oddCheckSum ^= packet[i];
-        evenCheckSum ^= packet[i + 1];
-    }
-    byte MsgType = packet[3];
-    byte SegNo = packet[ packetLength - 3 - (header[5] & 0x01) ];
-    
-    if ( packet[3] != 0x7F) {
-        delay(1);
-        sendAck(packet[3], packet[ sizeof(packet) - 3 ] );
-    }
-}
-
-void FBus::sendPacket(byte MsgType) {// Send a packet.
-// TODO
-// - Generate SeqNo dynamically
-// - Lookup command blocks based on MsgType
-// - Rewrite this using the packet structure
-// - Make function wait for acknowledgement is received or message is sent three times.
-//   Throw error if ack is not received.
-//
-    byte header[] = { 0x1E, (byte)0x00, 0x0C, MsgType, (byte)0x00, 0x07 };
-    byte body[] = { 0x00, 0x01, 0x00, 0x03, 0x00, 0x01, 0x60, 0x00 };
-    byte oddCheckSum = 0x00;
-    byte evenCheckSum = 0x00;
-    byte packet[ sizeof(header) + sizeof(body) + (sizeof(body) & 0x01) + 2 ];
-    for ( int i = 0; i < sizeof(header); i++) {
-        packet[i] = header[i];
-    }
-    for ( int i = 0; i < sizeof(body); i++) {
-        packet[i + sizeof(header)] = body[i];
-    }
-    for ( int i = 0; i < sizeof(packet); i++) {
-        packet[i + sizeof(header) + sizeof(body)] = 0x00;
-    }
-    for ( int i = 0; i < sizeof(packet) - 2; i += 2) {
-        oddCheckSum ^= packet[i];
-        evenCheckSum ^= packet[i + 1];
-    }
-    if (packet[5] & 0x01) {
-        packet[sizeof(packet) - 2 ] = oddCheckSum;
-        packet[sizeof(packet) - 1 ] = evenCheckSum;
-    }else {
-        packet[sizeof(packet) - 3 ] = oddCheckSum;
-        packet[sizeof(packet) - 2 ] = evenCheckSum;
-      
-    }
-    _serialPort->write( packet, sizeof(packet) );
-    for(int i = 0; i < sizeof(packet); i++) {
-    }
-    _serialPort->flush();
-}
-
-void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
-// TODO:
-// - Rewrite this using the packet structure
-//
-    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
-    byte ack[] = { 0x1E,  // FrameID: Cable (0x1E)
-                   0x00,  // DestDEV: Phone (0x00)
-                   0x0C,  // SrcDEV: PC (0x0C)
-                   0x7F,  // MsgType: Acknowledgement (0x7F)
-                   0x00,  // FrameLengthMSB, should always be 0x00
-                   0x02,  // FrameLengthLSB, should always be 0x00 for an ack packet
-                   MsgType,  // The message type we are acknowledging
-                   SeqNo & 0x07,  // SegNo: (<SeqNo from message> & 0x07). Sequence
-                                  // ranges from 0 through 7.
-                   oddCheckSum,  //  oddCheckSum is calculated later
-                   evenCheckSum   //  evenCheckSum is calculated later
-                 };
-    for ( int i = 0; i < sizeof(ack) - 2; i += 2) {
-        oddCheckSum ^= ack[i];
-        evenCheckSum ^= ack[i + 1];
-    }
-    ack[8] = oddCheckSum;
-    ack[9] = evenCheckSum;
-    _serialPort->write(ack, sizeof(ack));
-}
 
 void FBus::sendSMS(byte MsgType) {
 // Send an arbitrary SMS message.

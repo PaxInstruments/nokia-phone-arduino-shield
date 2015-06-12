@@ -20,7 +20,7 @@ typedef struct {
     byte MsgType = 0x00;
     byte FrameLengthMSB = 0x00;
     byte FrameLengthLSB = 0x00;
-    byte block[64] = {}; // Points to the command block array
+    byte block[64] = {};
     byte FramesToGo = 0x00; // Calculated number of remaining frames
     byte SeqNo = 0x00; // Calculated as previous SeqNo++
 //    PaddingByte?, // Include this byte if FrameLength is odd
@@ -30,31 +30,27 @@ typedef struct {
 
 class FBus {
     public:
-        FBus(Stream *serialPort);  // Create FBus object
-        FBus(Stream *serialPort, int SMSCenter);  // Create FBus object, set SMS Center number
-        void initializeBus();  // Perpares phone to receice F-Bus messages
-        void sendPacket(byte MsgType);  // Send a packet with the specified messag
-        void getPacket();
-        void sendSMS(byte MsgType);
-        void serialInterrupt();
-        void processIncomingByte(packet *incomingPacket);
-        packet* getIncomingPacket();
-        packet* requestHWSW();
-        void packetSend(packet *_packet);
-        void sendAck(byte MsgType, byte SeqNo );
-        void printTest(); // print the &incomingPacket
-        byte* SMS_pack(String text);
-        String SMS_unpack(byte* textPacked);
-        String versionHW();
-        String versionSW();
+        FBus(Stream *serialPort); // Create FBus object
+        void initializeBus(); // Prepare phone for communication
+        packet* getIncomingPacket(); // Retreive the incoming packet
+        packet* requestHWSW(); // Send HWSW request packet
+        void packetSend(packet *_packet); // Send a packet
+        void sendAck(byte MsgType, byte SeqNo ); // Aknowledge received packet
+        String versionHW(); // Set HW_version using requestHWSW()
+        String versionSW(); // Set SW_version using requestHWSW()
+        String HW_version; // Phone hardware version
+        String SW_version; // Phone software version
+        //
+        //
+        void sendSMS(byte MsgType);  // OBSOLETE. Hard coded packet from tutorial
     private:
-        Stream* _serialPort;
-        int _SMSCenter;
-        int checksum(packet *_packet);
-        packet incomingPacket;
-        packet outgoingPacket;
-        void serialFlush();  // Empty the serial input buffer
-        void packetReset(packet *_packet);
+        void processIncomingByte(packet *incomingPacket); // Byte-wise process the data stream
+        Stream* _serialPort; // Serial port attached to phone
+        int checksum(packet *_packet); // Verify or add a checksum
+        packet incomingPacket; // Incoming packet buffer
+        packet outgoingPacket; // Outgoing packet buffer
+        void serialFlush(); // Empty the serial input buffer
+        void packetReset(packet *_packet); // Reset al packet fields to 0x00
 };
 
 #endif
