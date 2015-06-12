@@ -68,8 +68,13 @@ void FBus::packetSend(packet *_packet) { // Send a packet
             _serialPort->write((byte)0x00);
         }
     }
+    checksum(_packet);
     _serialPort->write(_packet->oddChecksum);
     _serialPort->write(_packet->evenChecksum);
+    _serialPort->flush();
+    if (_packet->MsgType != ACK_MSG ) {
+        getACK();
+    }
 }
 
 void FBus::packetReset(packet *_packet) { // Reset al packet fields to 0x00
@@ -130,24 +135,6 @@ int FBus::checksum(packet *_packet) { // Verify or add a checksum
     }
 }
 
-String FBus::versionHW() { // Set HW_version using requestHWSW()
-    // TODO
-    // - Get the HW version number
-    // - Write HW and SW version to global variables
-    //  - Return global HW version
-
-    return "RH-19";
-}
-
-String FBus::versionSW() { // Set SW_version using requestHWSW()
-    // TODO
-    // - Get the HW version number
-    // - Write HW and SW version to global variables
-    //  - Return global HW version
-    
-    return "v 4.5";
-}
-
 packet* FBus::getIncomingPacket() { // Retreive the incoming packet
     packetReset(&incomingPacket);
     while ( !incomingPacket.packetReady ) {  // TODO: Added a timeout function here
@@ -165,6 +152,7 @@ packet* FBus::getIncomingPacket() { // Retreive the incoming packet
     }
     if ( incomingPacket.MsgType != ACK_MSG ) {
         sendAck(incomingPacket.MsgType, incomingPacket.SeqNo );
+        _serialPort->flush();
     }
     return &incomingPacket;
 }
@@ -275,6 +263,13 @@ void FBus::processIncomingByte(packet *_packet) { // Byte-wise process the data 
   }
 }
 
+void FBus::getACK() {
+    // TODO
+    // - Implement a stack system
+    // - Remove acknowledged packets form the outgoing stack
+    getIncomingPacket();
+}
+
 packet* FBus::requestHWSW() { // Send HWSW request packet
     packetReset( &outgoingPacket );
     // Request HWSW information packet
@@ -294,8 +289,48 @@ packet* FBus::requestHWSW() { // Send HWSW request packet
     outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
     outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
 //    PaddingByte?, // Include this byte if FrameLength is odd
-    checksum(&outgoingPacket);
-    packetSend( &outgoingPacket );
+    packetSend(&outgoingPacket);
+    packet* _packet = getIncomingPacket();
+    return _packet;
+}
+
+String FBus::versionSW() { // Return
+    // TODO
+    // - Seek through block to find software version string
+    String sw_version = "";
+    packet* _packet = requestHWSW();
+    for (int i = 4; i < 11; i++) {
+        char j = (byte)_packet->block[i];
+        sw_version = String(sw_version + j);
+    }
+    
+    return sw_version;
+}
+
+String FBus::versionDate() { // Return hardware version
+    // TODO
+    // - Seek through block to find date string
+    String version_date = "";
+    packet* _packet = requestHWSW();
+    for (int i = 17; i < 25; i++) {
+        char j = (byte)_packet->block[i];
+        version_date = String(version_date + j );
+    }
+    
+    return version_date;
+}
+
+String FBus::versionHW() { // Return hardware version
+    // TODO
+    // - Seek through block to find hardware version string
+    String hw_version = "";
+    packet* _packet = requestHWSW();
+    for (int i = 26; i < 31; i++) {
+        char j = (byte)_packet->block[i];
+        hw_version = String(hw_version + j );
+    }
+    
+    return hw_version;
 }
 
 void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet

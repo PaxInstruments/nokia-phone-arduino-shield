@@ -30,12 +30,10 @@ void setup() {
 void loop() {
     myPhone.initializeBus();
     delay(1);
-    myPhone.requestHWSW();
-//    myPhone.sendPacket(0xD1);
-    myPhone.getIncomingPacket();
-    myPhone.getIncomingPacket();
-    Serial.println(myPhone.versionHW());
-    Serial.println(myPhone.versionSW());
+    Serial.print("HW: ");Serial.println(myPhone.versionHW());
+    Serial.print("SW: ");Serial.println(myPhone.versionSW());
+    Serial.print("Date: ");Serial.println(myPhone.versionDate());
+    Serial.println();
     delay(1000);
 }
 

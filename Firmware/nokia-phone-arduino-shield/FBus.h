@@ -36,10 +36,10 @@ class FBus {
         packet* requestHWSW(); // Send HWSW request packet
         void packetSend(packet *_packet); // Send a packet
         void sendAck(byte MsgType, byte SeqNo ); // Aknowledge received packet
-        String versionHW(); // Set HW_version using requestHWSW()
-        String versionSW(); // Set SW_version using requestHWSW()
-        String HW_version; // Phone hardware version
-        String SW_version; // Phone software version
+        void getACK();
+        String versionHW(); // Return hardware version
+        String versionSW(); // Return software version
+        String versionDate(); // Return software version
     private:
         void processIncomingByte(packet *incomingPacket); // Byte-wise process the data stream
         Stream* _serialPort; // Serial port attached to phone
