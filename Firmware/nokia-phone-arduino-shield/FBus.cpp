@@ -20,6 +20,7 @@
 // MsgType
 #define REQ_HWSW 0x1D  // Request hardward and software information
 #define ACK_MSG 0x7F
+#define SMS 0x02
 // FrameLength
 #define FRAME_LENGTH_MAX 0xFF  // TODO: What is the maximum frame length?
 #define FRAME_LENGTH_MIN 0x00  // TODO: What is the minimum frame length?
@@ -349,7 +350,84 @@ void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
     packetSend( &outgoingPacket );    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
 }
 
+void FBus::packBytes() {
+    //
+    //
+    // TODO
+    // - Input an array pointer to input[]
+    // - Output an array pointer to decoded[]
+
+    char input [] = { 0b01101000, 0b01100101, 0b01101100, 0b01101100, 0b01101111 };
+    char msg[128];
+    char decode[128] = {};
+    int len;
+
+    unsigned char c = 0;
+    unsigned char w  = 0;
+    int n = 0;
+    int shift = 0;
+    int x = 0;
+
+    for ( n=0 ; n<5 ; ++n ) {
+        c = input[n] & 0b01111111;
+        c >>= shift;
+        w = input[n+1] & 0b01111111;
+        w <<= (7-shift);
+        shift +=1;
+        c = c | w;
+        if (shift == 7) {
+            shift = 0x00;
+            n++;
+        }
+        x = strlen(decode);
+        decode[x] = c;
+        decode[x+1] = 0;
+    }
+}
+
+byte FBus::reverseAndHex(int input) { // Reverse digits of an interger and output hex
+    // Example: input = 73, output = 0x37
+    // Example: input = 5, output = 0x50
+    int reverse = input%10 * 10 + input/10;
+    byte reverseHex = 0; // Fix this
+    return reverseHex;
+}
+
+void FBus::setSMSC(int SMSC_number) {
+    char a[] = { 0x12, 0x34, 0x56, 0x78, 0x90};
+    for ( int i; i < sizeof(a); i++ ){
+        a[i] = (([i] & 0b1111) << 4) | (a[i] >> 4);
+    }
+    Serial.write(a, sizeof(a));
+}
+
+/*
+    byte message[] = { 'h', 'e', 'l', 'l', 'o', '\0' };
+    char messagePacked[sizeof(message)];
+
+    unsigned char holder;
+    unsigned char bucket;
+    char decode[128];
+    int x;
+    int shifted = 0;
+    for ( int i = 0; i < sizeof(message); i++ ) {
+        holder = message[i] & 0x7f;
+        holder >>= shifted;
+        bucket = message[i+1] & 0x7f;
+        bucket <<= (7-shifted);
+        shifted += 1;
+        holder = holder | bucket;
+        if (shifted == 7) {
+            shifted = 0x00;
+            i++;
+        }
+        x = strlen(decode);
+        decode[x] = holder;
+        decode[x+1] = 0;
+    }
 
 
-
-
+    for ( int i = 0; i < strlen(decode); i++ ) {
+        Serial.print((unsigned char)decode[i]);
+    }
+*/

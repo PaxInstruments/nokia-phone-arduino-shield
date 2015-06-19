@@ -33,7 +33,11 @@ void loop() {
     Serial.print("HW: ");Serial.println(myPhone.versionHW());
     Serial.print("SW: ");Serial.println(myPhone.versionSW());
     Serial.print("Date: ");Serial.println(myPhone.versionDate());
+//    const char message[] = { 'h', 'e', 'l', 'l', 'o' };
+//    unsigned char phoneNumber[] = { '4', '5', '6', '7', '8', '9' };
+   // myPhone.SendSMS(message, phoneNumber );
+//    myPhone.packBytes();
     Serial.println();
-    delay(1000);
+    delay(2000);
 }
 

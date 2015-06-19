@@ -40,6 +40,11 @@ class FBus {
         String versionHW(); // Return hardware version
         String versionSW(); // Return software version
         String versionDate(); // Return software version
+        void packBytes();
+        byte reverseAndHex(int input);
+        void setSMSC(int SMSC_number);
+
+        unsigned char SendSMS(const char *Message, unsigned char *PhoneNumber);
     private:
         void processIncomingByte(packet *incomingPacket); // Byte-wise process the data stream
         Stream* _serialPort; // Serial port attached to phone
