@@ -22,22 +22,23 @@ FBus myPhone(&Serial1);
 
 void setup() {
     Serial.begin(115200);  // Start the serial link to PC
-    Serial1.begin(115200);  // Start the serial link to Phone
     
-    delay(2000);
+    //delay(2000);
+
+    myPhone.initialize(115200);
 }
     
 void loop() {
-    myPhone.initializeBus();
-    delay(1);
-    Serial.print("HW: ");Serial.println(myPhone.versionHW());
-    Serial.print("SW: ");Serial.println(myPhone.versionSW());
-    Serial.print("Date: ");Serial.println(myPhone.versionDate());
+    //myPhone.initializeBus();
+    //delay(1);
+    //Serial.print("HW: ");Serial.println(myPhone.versionHW());
+    //Serial.print("SW: ");Serial.println(myPhone.versionSW());
+    //Serial.print("Date: ");Serial.println(myPhone.versionDate());
 //    const char message[] = { 'h', 'e', 'l', 'l', 'o' };
 //    unsigned char phoneNumber[] = { '4', '5', '6', '7', '8', '9' };
    // myPhone.SendSMS(message, phoneNumber );
 //    myPhone.packBytes();
-    Serial.println();
+    Serial.println("Test");
     delay(2000);
 }
 
