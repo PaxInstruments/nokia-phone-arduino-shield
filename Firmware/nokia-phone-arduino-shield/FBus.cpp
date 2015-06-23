@@ -22,9 +22,9 @@
 #define FBUS_DEV_HOST       0x0C
 
 // MsgType
-#define REQ_HWSW            0xD1  // Request hardward and software information
-#define ACK_MSG             0x7F
-#define SMS                 0x02
+#define FBUSTYPE_REQ_HWSW   0xD1  // Request hardware and software information
+#define FBUSTYPE_ACK_MSG    0x7F
+#define FBUSTYPE_SMS        0x02
 
 // FrameLength
 #define FRAME_LENGTH_MAX    0xFF  // TODO: What is the maximum frame length?
@@ -63,6 +63,8 @@ void FBus::initialize()
     // Clear the RX
     serialFlush();
 
+    m_smsc_type = SMSC_TYPE_UNKNOWN;
+
     // Send 0x55 to initialize the phone, based on
     // captures 55 should be enough
     // http://www.codeproject.com/Articles/13452/A-Simple-Guide-To-Mobile-Phone-File-Transferring#Nokia_FBUS_File_Transferring
@@ -84,10 +86,9 @@ packet_t* FBus::requestHWSW()
     outgoingPacket.FrameID = FBUS_VIA_CABLE;
     outgoingPacket.DestDEV = FBUS_DEV_PHONE;
     outgoingPacket.SrcDEV = FBUS_DEV_HOST;
-    outgoingPacket.MsgType = REQ_HWSW;
+    outgoingPacket.MsgType = FBUSTYPE_REQ_HWSW;
     uint8_t block[] = { 0x00, 0x03, 0x00 };
     outgoingPacket.FrameLength = sizeof(block);
-    //if(outgoingPacket.FrameLength&1) outgoingPacket.FrameLength++;
     for (int i=0; i<sizeof(block); i++) {
         outgoingPacket.data[i] = block[i];
     }
@@ -99,6 +100,101 @@ packet_t* FBus::requestHWSW()
     return NULL;
 }
 
+void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
+{
+    int index=0;
+    int x,c;
+    // Send HWSW request packet
+    //packetReset( &outgoingPacket );
+    // Request HWSW information packet
+    outgoingPacket.FrameID = FBUS_VIA_CABLE;
+    outgoingPacket.DestDEV = FBUS_DEV_PHONE;
+    outgoingPacket.SrcDEV = FBUS_DEV_HOST;
+    outgoingPacket.MsgType = FBUSTYPE_SMS;
+    // Add in the boilerplate for this pkt
+    uint8_t block[] = { 0x00, 0x01, 0x02, 0x00 };
+    outgoingPacket.FrameLength = sizeof(block);
+    for (index=0; index<sizeof(block); index++) {
+        outgoingPacket.data[index] = block[index];
+    }
+    // Add in the length and SMSC type
+    outgoingPacket.data[index++] = 0x07;
+    outgoingPacket.data[index++] = m_smsc_type;
+    outgoingPacket.FrameLength+=2;
+
+    // Add in the SMSC number
+    for(x=0;x<6;x++)
+    {
+        // Blank for now, TODO: fix this
+        outgoingPacket.data[index++]=0;
+    }
+    outgoingPacket.FrameLength+=6;
+
+    // Add in magic number for outbound SMS type
+    // The message is SMS Submit, Reject Duplicates, and Validity Indicator present.
+    outgoingPacket.data[index++]=0x15;
+    outgoingPacket.FrameLength++;
+
+    // Skip 3 numbers
+    for(x=0;x<3;x++)
+        outgoingPacket.data[index++]=0;
+    outgoingPacket.FrameLength+=3;
+
+    // TODO: Add in unpacked message size
+    outgoingPacket.data[index++]=0x00;
+    outgoingPacket.FrameLength++;
+
+    // TODO: Add dest number length
+    outgoingPacket.data[index++]=0x00;
+    outgoingPacket.FrameLength++;
+
+    // TODO: Add number type
+    outgoingPacket.data[index++] = SMSC_TYPE_UNKNOWN;
+    outgoingPacket.FrameLength+=2;
+
+    // TODO: Add in 10 bytes for phone number
+    for(x=0;x<10;x++)
+    {
+        // Blank for now, TODO: fix this
+        outgoingPacket.data[index++]=0;
+    }
+    outgoingPacket.FrameLength+=10;
+
+    // TODO: Validity period
+    outgoingPacket.data[index++]=0x00;
+    outgoingPacket.FrameLength++;
+
+    // TODO: Timestamp?
+    for(x=0;x<6;x++)
+    {
+        // Blank for now, TODO: fix this
+        outgoingPacket.data[index++]=0;
+    }
+    outgoingPacket.FrameLength+=6;
+
+    // TODO: The SMS message!!!
+    c = strlen(message);
+    for(x=0;x<c;x++)
+    {
+        // Blank for now, TODO: fix this
+        outgoingPacket.data[index++]=message[x];
+    }
+    outgoingPacket.FrameLength+=c;
+
+    // TODO: Always 0?
+    outgoingPacket.data[index++]=0x00;
+    outgoingPacket.FrameLength++;
+
+
+    outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
+    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
+
+    packetSend(&outgoingPacket);
+
+    //packet_t* _packet = getIncomingPacket();
+    //return _packet;
+
+}
 
 
 // Private functions
@@ -123,7 +219,7 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     _serialPort->write(_packet->MsgType);
     _serialPort->write(_packet->FrameLengthMSB);
     _serialPort->write(_packet->FrameLengthLSB);
-    if (_packet->MsgType == ACK_MSG )
+    if (_packet->MsgType == FBUSTYPE_ACK_MSG )
     {
         for ( byte i = 0x00; i < 2; i++ )
         {
@@ -145,7 +241,7 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     _serialPort->write(_packet->oddChecksum);
     _serialPort->write(_packet->evenChecksum);
     _serialPort->flush();
-    if (_packet->MsgType != ACK_MSG ) {
+    if (_packet->MsgType != FBUSTYPE_ACK_MSG ) {
         getACK();
     }
     #else
@@ -195,6 +291,45 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     return;
 }
 
+// Improved bit packing algorithm based on Embedtronics page.  This
+// overwrites the same buffer so is more efficient
+// max length is 255
+// http://web.archive.org/web/20120712020156/http://www.embedtronics.com/nokia/fbus.html
+uint8_t FBus::BitPack(uint8_t * buffer,uint8_t length)
+{
+    uint8_t holder;
+    uint8_t bucket;
+    uint8_t x=0,shifted=0,i;
+
+    for(i = 0; i < length; i++ )
+    {
+        holder = buffer[i] & 0x7f;
+        holder >>= shifted;
+        bucket = buffer[i+1] & 0x7f;
+        bucket <<= (7-shifted);
+        shifted += 1;
+        holder = holder | bucket;
+        if (shifted >= 7) {
+            shifted = 0;
+            i++;
+        }
+        buffer[x] = holder;
+        x++;
+    }
+
+    return x;
+}
+
+// We will need (length/7) extra bytes for the message
+//uint8_t decode[128];
+uint8_t FBus::BitUnpack(uint8_t * buffer,uint8_t length)
+{
+    // TODO
+
+    return 0;
+}
+
+
 void FBus::packetReset(frame_header_t *packet_ptr)
 {
     memset(packet_ptr,0,sizeof(frame_header_t));
@@ -210,7 +345,7 @@ int FBus::checksum(packet_t *_packet)
     evenChecksum ^= _packet->MsgType;
     oddChecksum ^= _packet->FrameLengthMSB;
     evenChecksum ^= _packet->FrameLengthLSB;
-    if ( _packet->MsgType == ACK_MSG )
+    if ( _packet->MsgType == FBUSTYPE_ACK_MSG )
     {
         for ( byte i = 0x00; i < _packet->FrameLengthLSB; i += 2 )
         {
@@ -316,7 +451,7 @@ void FBus::processIncomingByte(uint8_t inbyte)
         case 0x06:  // {block}
             _packet->block[_packet->blockIndex] = inbyte;
             _packet->blockIndex++;
-            if ( _packet->MsgType == ACK_MSG ) {
+            if ( _packet->MsgType == FBUSTYPE_ACK_MSG ) {
                 if ( _packet->blockIndex >= 2 ) {
                     input_state += 3;
                 }
@@ -383,7 +518,7 @@ packet_t* FBus::getIncomingPacket()
             //processIncomingByte(&incomingPacket);
         }
     }
-    if ( incomingPacket.MsgType != ACK_MSG )
+    if ( incomingPacket.MsgType != FBUSTYPE_ACK_MSG )
     {
         sendAck(incomingPacket.MsgType, incomingPacket.SeqNo );
         _serialPort->flush();

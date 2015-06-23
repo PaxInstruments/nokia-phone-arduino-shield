@@ -14,6 +14,12 @@
 #define FBUS_VERSION_1      1
 #define FBUS_VERSION_2      2
 
+typedef enum{
+    SMSC_TYPE_UNKNOWN = 0x81,
+    SMSC_TYPE_INTERNATIONAL = 0x91,
+    SMSC_TYPE_NATIONAL = 0xA1,
+}fbus_smsc_e;
+
 // The ordering of this struct is important, this matches
 // the FBus frame starting with FrameID, this way we can
 // just send the array without extra processing.
@@ -54,8 +60,7 @@ class FBus {
         void process();
         void initialize(); // Prepare phone for communication
         packet_t* requestHWSW(); // Send HWSW request packet
-
-
+        void SendSMS(char * phonenum,char * msgcenter, char * message);
 
         void sendAck(byte MsgType, byte SeqNo ); // Aknowledge received packet
         void getACK();
@@ -69,7 +74,7 @@ class FBus {
         unsigned char SendSMS(const char *Message, unsigned char *PhoneNumber);
     private:
 
-        uint8_t m_block[64] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
+        uint8_t m_block[128] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
         frame_header_t * m_frame_ptr;
 
 
@@ -77,9 +82,12 @@ class FBus {
         HardwareSerial & _serialPort; // Serial port attached to phone
         packet_t incomingPacket; // Incoming packet buffer
         frame_header_t outgoingPacket; // Outgoing packet buffer
+        fbus_smsc_e m_smsc_type;
 
         void serialFlush(); // Empty the serial input buffer
         void packetSend(frame_header_t * packet_ptr);
+        uint8_t BitPack(uint8_t * buffer,uint8_t length);
+        uint8_t BitUnpack(uint8_t * buffer,uint8_t length);
         void packetReset(frame_header_t *packet_ptr);
         void processIncomingByte(uint8_t inbyte);
         packet_t* getIncomingPacket(); // Retreive the incoming packet
