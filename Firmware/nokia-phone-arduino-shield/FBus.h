@@ -50,12 +50,13 @@ typedef struct {
 
 class FBus {
     public:
-        FBus(HardwareSerial *serialPort); // Create FBus object
-        void initialize(int baud); // Prepare phone for communication
-
-        packet_t* getIncomingPacket(); // Retreive the incoming packet
+        FBus(HardwareSerial & serialPort); // Create FBus object
+        void process();
+        void initialize(); // Prepare phone for communication
         packet_t* requestHWSW(); // Send HWSW request packet
-        void packetSend(frame_header_t * packet_ptr);
+
+
+
         void sendAck(byte MsgType, byte SeqNo ); // Aknowledge received packet
         void getACK();
         String versionHW(); // Return hardware version
@@ -71,13 +72,17 @@ class FBus {
         uint8_t m_block[64] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
         frame_header_t * m_frame_ptr;
 
-        void processIncomingByte(uint8_t inbyte);
-        HardwareSerial* _serialPort; // Serial port attached to phone
-        //int checksum(packet_t *_packet); // Verify or add a checksum
+
+
+        HardwareSerial & _serialPort; // Serial port attached to phone
         packet_t incomingPacket; // Incoming packet buffer
-        packet_t outgoingPacket; // Outgoing packet buffer
+        frame_header_t outgoingPacket; // Outgoing packet buffer
+
         void serialFlush(); // Empty the serial input buffer
+        void packetSend(frame_header_t * packet_ptr);
         void packetReset(frame_header_t *packet_ptr);
+        void processIncomingByte(uint8_t inbyte);
+        packet_t* getIncomingPacket(); // Retreive the incoming packet
 };
 
 #endif

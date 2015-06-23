@@ -11,6 +11,8 @@
 //  FBus fred(&Serial1);
 //
 
+#define UINT16_SWAP(V)      do{(V) = ((V)>>8)|((V)<<8);}while(0)
+
 // FrameID values
 #define FBUS_VIA_CABLE      0x1E
 #define FBUS_VIA_IRDA       0x1C
@@ -20,7 +22,7 @@
 #define FBUS_DEV_HOST       0x0C
 
 // MsgType
-#define REQ_HWSW            0x1D  // Request hardward and software information
+#define REQ_HWSW            0xD1  // Request hardward and software information
 #define ACK_MSG             0x7F
 #define SMS                 0x02
 
@@ -31,45 +33,82 @@
 
 // Include any necessary files
 #include "Arduino.h"
+#include "HardwareSerial.h"
 #include "FBus.h"
 #include "string.h"
 
-FBus::FBus(HardwareSerial *serialPort)
+FBus::FBus(HardwareSerial & serialPort)
+: _serialPort(serialPort)
 {
-    _serialPort = serialPort;
-    serialFlush();
-
     memset(m_block,0,sizeof(m_block));
 
     m_frame_ptr = (frame_header_t*)&m_block;
+}
 
+void FBus::process()
+{
+    char c;
+    while(_serialPort.available())
+    {
+        c=_serialPort.read();
+        if(c==-1) break;
+        this->processIncomingByte(c);
+    }
+    return;
 }
 
 // Prepare phone for communication
-void FBus::initialize(int baud)
+void FBus::initialize()
 {
-    // Setup port and make sure it is cleared
-    _serialPort->begin(baud);
+    // Clear the RX
     serialFlush();
 
     // Send 0x55 to initialize the phone, based on
     // captures 55 should be enough
     // http://www.codeproject.com/Articles/13452/A-Simple-Guide-To-Mobile-Phone-File-Transferring#Nokia_FBUS_File_Transferring
     for (int i = 0; i < 55; i++) {
-      _serialPort->write(0x55);
+        _serialPort.write(0x55);
     }
-    _serialPort->flush();
+    _serialPort.flush();
 
     // Phone should be in FBus mode now
 
     return;
 }
 
+packet_t* FBus::requestHWSW()
+{
+    // Send HWSW request packet
+    //packetReset( &outgoingPacket );
+    // Request HWSW information packet
+    outgoingPacket.FrameID = FBUS_VIA_CABLE;
+    outgoingPacket.DestDEV = FBUS_DEV_PHONE;
+    outgoingPacket.SrcDEV = FBUS_DEV_HOST;
+    outgoingPacket.MsgType = REQ_HWSW;
+    uint8_t block[] = { 0x00, 0x03, 0x00 };
+    outgoingPacket.FrameLength = sizeof(block);
+    //if(outgoingPacket.FrameLength&1) outgoingPacket.FrameLength++;
+    for (int i=0; i<sizeof(block); i++) {
+        outgoingPacket.data[i] = block[i];
+    }
+    outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
+    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
+    packetSend(&outgoingPacket);
+    //packet_t* _packet = getIncomingPacket();
+    //return _packet;
+    return NULL;
+}
+
+
+
+// Private functions
+// ------------------------------------------------------
+
 // Empty the serial input buffer
 void FBus::serialFlush()
 {
-    while (Serial.available() > 0) {
-        _serialPort->read();
+    while(_serialPort.available() > 0) {
+        _serialPort.read();
     }
     return;
 }
@@ -112,30 +151,44 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     #else
     int count;
     uint8_t * data_ptr;
-    uint8_t checksum_odd,checksum_even;
-    checksum_odd = 0;
-    checksum_even = 0;
+    uint8_t checksum_odd=0,checksum_even=0;
     data_ptr = (uint8_t*)&(packet_ptr->FrameID);
-    count = (packet_ptr->FrameLength+sizeof(frame_header_t)-offsetof(frame_header_t,FrameID));
+    count = (packet_ptr->FrameLength+(sizeof(frame_header_t)-offsetof(frame_header_t,FrameID)));
+    if(count&1) packet_ptr->FrameLength++;
+    // Add 2 to FrameLength for the padding16 bytes
+    // Add 1 to FrameLength for the FramesToGo value
+    packet_ptr->FrameLength+=3;
+    packet_ptr->padding16 = 1;
+    UINT16_SWAP(packet_ptr->FrameLength);
+    UINT16_SWAP(packet_ptr->padding16);
     for(int x=0;x<count;x++)
     {
-        _serialPort->write(data_ptr[x]);
+        _serialPort.write(data_ptr[x]);
         if(x&1)
             checksum_odd ^= data_ptr[x];
         else
             checksum_even ^= data_ptr[x];
     }
+
+    // Now send the last 2 data bytes
+    _serialPort.write(packet_ptr->FramesToGo);
+    _serialPort.write(packet_ptr->SeqNo);
+
+    if(count&1)
+    {
+        checksum_odd ^= packet_ptr->FramesToGo;
+        checksum_even ^= packet_ptr->SeqNo;
+    }else{
+        checksum_even ^= packet_ptr->FramesToGo;
+        checksum_odd ^= packet_ptr->SeqNo;
+    }
+
     // Make sure we send an even number of bytes
-    if(count&1) _serialPort->write(0);
-    // Now send the last 2 bytes
-    _serialPort->write(packet_ptr->FramesToGo);
-    checksum_odd ^= packet_ptr->FramesToGo;
-    _serialPort->write(packet_ptr->SeqNo);
-    checksum_even ^= packet_ptr->SeqNo;
+    if(count&1) _serialPort.write(0);
 
     // Now send the checksums
-    _serialPort->write(checksum_odd);
-    _serialPort->write(checksum_even);
+    _serialPort.write(checksum_even);
+    _serialPort.write(checksum_odd);
 
     #endif
 
@@ -194,33 +247,6 @@ int FBus::checksum(packet_t *_packet)
     }
 }
 #endif
-
-// Retreive the incoming packet
-packet_t* FBus::getIncomingPacket()
-{
-    //packetReset(&incomingPacket);
-    while ( !incomingPacket.packetReady )
-    {  // TODO: Added a timeout function here
-        // DEBUG NTOES: 
-        // We get to here just fine
-        //_serialPort->write(0xD0);
-        // Repeats 0xD0 forever
-        if ( _serialPort->available() )
-        {
-            // DEBUG NOTES:
-            // We get here just fine
-            // _serialPort->write(0xD1);
-            // Appears to write 0xD1 while processing bytes
-            //processIncomingByte(&incomingPacket);
-        }
-    }
-    if ( incomingPacket.MsgType != ACK_MSG )
-    {
-        sendAck(incomingPacket.MsgType, incomingPacket.SeqNo );
-        _serialPort->flush();
-    }
-    return &incomingPacket;
-}
 
 // Byte-wise process the data stream
 void FBus::processIncomingByte(uint8_t inbyte)
@@ -336,6 +362,38 @@ void FBus::processIncomingByte(uint8_t inbyte)
     return;
 }
 
+
+// Retreive the incoming packet
+packet_t* FBus::getIncomingPacket()
+{
+#if 0
+    //packetReset(&incomingPacket);
+    while ( !incomingPacket.packetReady )
+    {  // TODO: Added a timeout function here
+        // DEBUG NTOES:
+        // We get to here just fine
+        //_serialPort->write(0xD0);
+        // Repeats 0xD0 forever
+        if ( _serialPort->available() )
+        {
+            // DEBUG NOTES:
+            // We get here just fine
+            // _serialPort->write(0xD1);
+            // Appears to write 0xD1 while processing bytes
+            //processIncomingByte(&incomingPacket);
+        }
+    }
+    if ( incomingPacket.MsgType != ACK_MSG )
+    {
+        sendAck(incomingPacket.MsgType, incomingPacket.SeqNo );
+        _serialPort->flush();
+    }
+    return &incomingPacket;
+#endif
+    return NULL;
+}
+
+
 void FBus::getACK()
 {
     // TODO
@@ -344,32 +402,12 @@ void FBus::getACK()
     getIncomingPacket();
 }
 
-packet_t* FBus::requestHWSW()
-{ // Send HWSW request packet
-    //packetReset( &outgoingPacket );
-    // Request HWSW information packet
-    outgoingPacket.fieldIndex = 0x00;
-    outgoingPacket.blockIndex = 0x00;
-    outgoingPacket.packetReady = 0;
-    outgoingPacket.FrameID = 0x1E;
-    outgoingPacket.DestDEV = 0x00;
-    outgoingPacket.SrcDEV = 0x0C;
-    outgoingPacket.MsgType = 0xD1;
-    outgoingPacket.FrameLengthMSB = 0x00;
-    outgoingPacket.FrameLengthLSB = 0x07;
-    byte block[] = { 0x00, 0x01, 0x00, 0x03, 0x00 };
-    for (int i=0; i<sizeof(block); i++) {
-        outgoingPacket.block[i] = block[i];
-    }
-    outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
-    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
-//    PaddingByte?, // Include this byte if FrameLength is odd
-    //packetSend(&outgoingPacket);
-    packet_t* _packet = getIncomingPacket();
-    return _packet;
-}
 
-String FBus::versionSW() { // Return
+
+String FBus::versionSW()
+{
+#if 0
+    // Return
     // TODO
     // - Seek through block to find software version string
     String sw_version = "";
@@ -378,13 +416,18 @@ String FBus::versionSW() { // Return
         char j = (byte)_packet->block[i];
         sw_version = String(sw_version + j);
     }
-    
+
     return sw_version;
+#endif
+    return "0";
 }
 
-String FBus::versionDate() { // Return hardware version
+String FBus::versionDate()
+{
+    // Return hardware version
     // TODO
     // - Seek through block to find date string
+#if 0
     String version_date = "";
     packet_t* _packet = requestHWSW();
     for (int i = 17; i < 25; i++) {
@@ -393,9 +436,14 @@ String FBus::versionDate() { // Return hardware version
     }
     
     return version_date;
+#endif
+    return "0";
 }
 
-String FBus::versionHW() { // Return hardware version
+String FBus::versionHW()
+{
+#if 0
+    // Return hardware version
     // TODO
     // - Seek through block to find hardware version string
     String hw_version = "";
@@ -406,9 +454,14 @@ String FBus::versionHW() { // Return hardware version
     }
     
     return hw_version;
+#endif
+    return "0";
 }
 
-void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
+void FBus::sendAck(byte MsgType, byte SeqNo )
+{
+#if 0
+    // Acknowledge packet
     //packetReset( &outgoingPacket );
     outgoingPacket.FrameID = 0x1E;
     outgoingPacket.DestDEV = 0x00;
@@ -422,9 +475,12 @@ void FBus::sendAck(byte MsgType, byte SeqNo ) {  // Acknowledge packet
     }
     //checksum(&outgoingPacket);
     //packetSend( &outgoingPacket );    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
+#endif
 }
 
-void FBus::packBytes() {
+void FBus::packBytes()
+{
+#if 0
     //
     //
     // TODO
@@ -457,22 +513,31 @@ void FBus::packBytes() {
         decode[x] = c;
         decode[x+1] = 0;
     }
+#endif
 }
 
-byte FBus::reverseAndHex(int input) { // Reverse digits of an interger and output hex
+byte FBus::reverseAndHex(int input)
+{
+#if 0
+    // Reverse digits of an interger and output hex
     // Example: input = 73, output = 0x37
     // Example: input = 5, output = 0x50
     int reverse = input%10 * 10 + input/10;
     byte reverseHex = 0; // Fix this
     return reverseHex;
+#endif
+    return 0;
 }
 
-void FBus::setSMSC(int SMSC_number) {
+void FBus::setSMSC(int SMSC_number)
+{
+#if 0
     char a[] = { 0x12, 0x34, 0x56, 0x78, 0x90};
     for ( int i; i < sizeof(a); i++ ){
         a[i] = ((a[i] & 0xF) << 4) | (a[i] >> 4);
     }
     Serial.write(a, sizeof(a));
+#endif
 }
 
 /*

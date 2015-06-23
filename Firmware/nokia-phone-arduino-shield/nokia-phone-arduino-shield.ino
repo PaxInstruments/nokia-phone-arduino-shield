@@ -18,14 +18,14 @@
 
 #include "FBus.h"
 
-FBus myPhone(&Serial1);
+FBus myPhone(Serial1);
 
 void setup() {
     Serial.begin(115200);  // Start the serial link to PC
-    
-    //delay(2000);
+    Serial1.begin(115200);
 
-    myPhone.initialize(115200);
+    myPhone.initialize();
+
 }
     
 void loop() {
@@ -38,7 +38,19 @@ void loop() {
 //    unsigned char phoneNumber[] = { '4', '5', '6', '7', '8', '9' };
    // myPhone.SendSMS(message, phoneNumber );
 //    myPhone.packBytes();
-    Serial.println("Test");
+
+    myPhone.requestHWSW();
+
+    myPhone.process();
+
+
+    Serial.write("Frame: ");
+    Serial.write(sizeof(frame_header_t));
+    Serial.write(" Offset: ");
+    Serial.write(offsetof(frame_header_t,FrameID));
+    Serial.write('\n');
+
+
     delay(2000);
 }
 
