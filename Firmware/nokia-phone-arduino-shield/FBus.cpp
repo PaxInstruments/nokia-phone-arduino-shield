@@ -396,7 +396,7 @@ byte FBus::reverseAndHex(int input) { // Reverse digits of an interger and outpu
 void FBus::setSMSC(int SMSC_number) {
     char a[] = { 0x12, 0x34, 0x56, 0x78, 0x90};
     for ( int i; i < sizeof(a); i++ ){
-        a[i] = (([i] & 0b1111) << 4) | (a[i] >> 4);
+       // a[i] = (([i] & 0b1111) << 4) | (a[i] >> 4);
     }
     Serial.write(a, sizeof(a));
 }
