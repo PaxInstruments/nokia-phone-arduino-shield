@@ -40,9 +40,7 @@
 FBus::FBus(HardwareSerial & serialPort)
 : _serialPort(serialPort)
 {
-    memset(m_block,0,sizeof(m_block));
-
-    m_frame_ptr = (frame_header_t*)&m_block;
+    // Setup things
 }
 
 void FBus::process()
@@ -64,6 +62,10 @@ void FBus::initialize()
     serialFlush();
 
     m_smsc_type = SMSC_TYPE_UNKNOWN;
+    memset(m_smsc,0,sizeof(m_smsc));
+
+    m_phonenumber_type = SMSC_TYPE_UNKNOWN;
+    memset(m_phonenumber,0,sizeof(m_phonenumber));
 
     // Send 0x55 to initialize the phone, based on
     // captures 55 should be enough
@@ -75,6 +77,26 @@ void FBus::initialize()
 
     // Phone should be in FBus mode now
 
+    return;
+}
+
+void FBus::SetSMSC(char * smsc, fbus_smsc_e type)
+{
+    uint8_t c;
+    //pbuf((uint8_t*)smsc,strlen(smsc),true);
+    // TODO: fill might be 0, check
+    c = octetPack(smsc,m_smsc,sizeof(m_smsc),0x00);
+    //pbuf((uint8_t*)m_smsc,sizeof(m_smsc),true);
+    m_smsc_type = type;
+    return;
+}
+void FBus::SetPhoneNumber(char * number, fbus_smsc_e type)
+{
+    uint8_t c;
+    //pbuf((uint8_t*)number,strlen(number),true);
+    c = octetPack(number,m_phonenumber,sizeof(m_phonenumber),0x00);
+    //pbuf((uint8_t*)m_phonenumber,sizeof(m_phonenumber),true);
+    m_phonenumber_type = type;
     return;
 }
 
@@ -102,8 +124,17 @@ packet_t* FBus::requestHWSW()
 
 void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
 {
+    SetSMSC(msgcenter, SMSC_TYPE_UNKNOWN);
+    SetPhoneNumber(phonenum, SMSC_TYPE_UNKNOWN);
+    SendSMS(message);
+    return;
+}
+
+void FBus::SendSMS(char * message)
+{
     int index=0;
-    int x,c;
+    int x,c,len;
+
     // Send HWSW request packet
     //packetReset( &outgoingPacket );
     // Request HWSW information packet
@@ -113,23 +144,23 @@ void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
     outgoingPacket.MsgType = FBUSTYPE_SMS;
     // Add in the boilerplate for this pkt
     uint8_t block[] = { 0x00, 0x01, 0x02, 0x00 };
-    outgoingPacket.FrameLength = sizeof(block);
     for (index=0; index<sizeof(block); index++) {
         outgoingPacket.data[index] = block[index];
     }
-    // Add in the length and SMSC type
+    outgoingPacket.FrameLength = sizeof(block);
+
+    // Add in the smsc number length (len+type = 7) and SMSC type
     outgoingPacket.data[index++] = 0x07;
-    outgoingPacket.data[index++] = m_smsc_type;
+    outgoingPacket.data[index++] = (uint8_t)m_smsc_type;
     outgoingPacket.FrameLength+=2;
 
     // Add in the SMSC number
-    for(x=0;x<6;x++)
+    for(x=0;x<sizeof(m_smsc);x++)
     {
-        // Blank for now, TODO: fix this
-        outgoingPacket.data[index++]=0;
+        outgoingPacket.data[index++]=m_smsc[x];
     }
-    outgoingPacket.FrameLength+=6;
-
+    outgoingPacket.FrameLength+=sizeof(m_smsc);
+#if 1
     // Add in magic number for outbound SMS type
     // The message is SMS Submit, Reject Duplicates, and Validity Indicator present.
     outgoingPacket.data[index++]=0x15;
@@ -140,31 +171,32 @@ void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
         outgoingPacket.data[index++]=0;
     outgoingPacket.FrameLength+=3;
 
-    // TODO: Add in unpacked message size
-    outgoingPacket.data[index++]=0x00;
+    // Add in unpacked message size
+    len = strlen(message);
+    outgoingPacket.data[index++]=len;
     outgoingPacket.FrameLength++;
 
-    // TODO: Add dest number length
-    outgoingPacket.data[index++]=0x00;
+    // Add dest number length
+    outgoingPacket.data[index++]=sizeof(m_phonenumber);
     outgoingPacket.FrameLength++;
 
-    // TODO: Add number type
-    outgoingPacket.data[index++] = SMSC_TYPE_UNKNOWN;
+    // Add number type
+    outgoingPacket.data[index++] = m_phonenumber_type;
     outgoingPacket.FrameLength+=2;
 
-    // TODO: Add in 10 bytes for phone number
-    for(x=0;x<10;x++)
+    // Add in 10 bytes for phone number
+    for(x=0;x<sizeof(m_phonenumber);x++)
     {
         // Blank for now, TODO: fix this
-        outgoingPacket.data[index++]=0;
+        outgoingPacket.data[index++]=m_phonenumber[x];
     }
-    outgoingPacket.FrameLength+=10;
+    outgoingPacket.FrameLength+=sizeof(m_phonenumber);
 
-    // TODO: Validity period
-    outgoingPacket.data[index++]=0x00;
+    // Validity period, magic number 0xA7
+    outgoingPacket.data[index++]=0xA7;
     outgoingPacket.FrameLength++;
 
-    // TODO: Timestamp?
+    // Timestamp? 6 chars, all 0
     for(x=0;x<6;x++)
     {
         // Blank for now, TODO: fix this
@@ -173,7 +205,7 @@ void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
     outgoingPacket.FrameLength+=6;
 
     // TODO: The SMS message!!!
-    c = strlen(message);
+    c = BitPack((uint8_t*)message,len);
     for(x=0;x<c;x++)
     {
         // Blank for now, TODO: fix this
@@ -181,13 +213,18 @@ void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
     }
     outgoingPacket.FrameLength+=c;
 
-    // TODO: Always 0?
-    outgoingPacket.data[index++]=0x00;
-    outgoingPacket.FrameLength++;
+    outgoingPacket.FrameLength--;
 
+    // TODO: This byte is not in the message, it is the FramesToGo
+    // TODO: Always 0? this is byte 93 in the example, the doc says always 0 but the
+    // bytes show 0x01
+    //outgoingPacket.data[index++]=0x01;
+    //outgoingPacket.FrameLength++;
 
     outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
-    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
+    outgoingPacket.SeqNo = 0x43;
+#endif
+    pbuf(outgoingPacket.data,outgoingPacket.FrameLength,true);
 
     packetSend(&outgoingPacket);
 
@@ -195,7 +232,15 @@ void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
     //return _packet;
 
 }
-
+void FBus::pbuf(uint8_t * buf,int len, bool hex)
+{
+    int x,id;
+    char out[400];
+    id=0;
+    for(x=0;x<len;x++) id+=sprintf(&(out[id]),"x%02X,",buf[x]);
+    //printf("\n");
+    Serial.println(out);
+}
 
 // Private functions
 // ------------------------------------------------------
@@ -207,6 +252,37 @@ void FBus::serialFlush()
         _serialPort.read();
     }
     return;
+}
+
+uint8_t FBus::octetPack(char * instr,uint8_t * outbuf,uint8_t outbuf_size,uint8_t fill)
+{
+
+    char c;
+    uint8_t x,i;
+    memset(outbuf,0,outbuf_size);
+    x=0;
+    i=0;
+    while(*instr!=0)
+    {
+        c=*instr;
+        if(c>='0' && c<='9')
+        {
+            //printf("x%02X,",c);
+            outbuf[i]=(outbuf[i]&0xF0)|(c-'0');
+            //outbuf[i]|=(c-'0');
+            if((x&1)==0){
+                outbuf[i]<<=4;
+                outbuf[i]|=(0x0F&fill);
+            }else{
+                i++;
+            }
+            x++;
+        }
+        instr++;
+    }
+    //printf("digits: %d\n",x);
+    for(i=0;i<(x/2);i++) outbuf[i]=((outbuf[i]&0xF)<<4)|(outbuf[i]>>4);
+    return (x/2);
 }
 
 // Send a packet
@@ -249,7 +325,13 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     uint8_t * data_ptr;
     uint8_t checksum_odd=0,checksum_even=0;
     data_ptr = (uint8_t*)&(packet_ptr->FrameID);
-    count = (packet_ptr->FrameLength+(sizeof(frame_header_t)-offsetof(frame_header_t,FrameID)));
+    count = packet_ptr->FrameLength;
+    count += (offsetof(frame_header_t,data)-offsetof(frame_header_t,FrameID));
+    {
+        char outbuf[50];
+        sprintf(outbuf,"count: %d",count);
+        Serial.println(outbuf);
+    }
     if(count&1) packet_ptr->FrameLength++;
     // Add 2 to FrameLength for the padding16 bytes
     // Add 1 to FrameLength for the FramesToGo value

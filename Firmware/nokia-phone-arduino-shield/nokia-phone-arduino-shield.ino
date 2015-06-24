@@ -24,7 +24,19 @@ void setup() {
     Serial.begin(115200);  // Start the serial link to PC
     Serial1.begin(115200);
 
+    // wait for serial port to be opened by the PC!
+    while(!Serial);
+
     myPhone.initialize();
+
+    //delay(2000);
+
+    //myPhone.SetSMSC("+16091231234", SMSC_TYPE_NATIONAL);
+    //myPhone.SetPhoneNumber("+16095298807", SMSC_TYPE_NATIONAL);
+
+    myPhone.SetSMSC("+61411990010",SMSC_TYPE_INTERNATIONAL);
+    myPhone.SetPhoneNumber("+040378007400",SMSC_TYPE_UNKNOWN);
+    myPhone.SendSMS("Hi All. This message was sent through F-Bus. Cool!!");
 
 }
     
@@ -39,17 +51,17 @@ void loop() {
    // myPhone.SendSMS(message, phoneNumber );
 //    myPhone.packBytes();
 
-    myPhone.requestHWSW();
+    //myPhone.requestHWSW();
 
     myPhone.process();
 
 
-    Serial.write("Frame: ");
-    Serial.write(sizeof(frame_header_t));
-    Serial.write(" Offset: ");
-    Serial.write(offsetof(frame_header_t,FrameID));
-    Serial.write('\n');
-
+    //Serial.write("Frame: ");
+    //Serial.write(sizeof(frame_header_t));
+    //Serial.write(" Offset: ");
+    //Serial.write(offsetof(frame_header_t,FrameID));
+    //Serial.write('\n');
+    Serial.println("Loop");
 
     delay(2000);
 }

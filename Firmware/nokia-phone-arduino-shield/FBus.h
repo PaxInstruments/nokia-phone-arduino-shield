@@ -33,7 +33,7 @@ typedef struct {
     uint8_t MsgType;
     uint16_t FrameLength;
     uint16_t padding16;
-    uint8_t data[];
+    uint8_t data[128];
 }frame_header_t;
 
 typedef struct { 
@@ -56,11 +56,16 @@ typedef struct {
 
 class FBus {
     public:
-        FBus(HardwareSerial & serialPort); // Create FBus object
+        FBus(HardwareSerial & serialPort);
         void process();
-        void initialize(); // Prepare phone for communication
-        packet_t* requestHWSW(); // Send HWSW request packet
+        // Prepare phone for communication
+        void initialize();
+        void SetSMSC(char * smsc, fbus_smsc_e type);
+        void SetPhoneNumber(char * number, fbus_smsc_e type);
+        // Send HWSW request packet
+        packet_t* requestHWSW();
         void SendSMS(char * phonenum,char * msgcenter, char * message);
+        void SendSMS(char * message);
 
         void sendAck(byte MsgType, byte SeqNo ); // Aknowledge received packet
         void getACK();
@@ -70,21 +75,26 @@ class FBus {
         void packBytes();
         byte reverseAndHex(int input);
         void setSMSC(int SMSC_number);
+        void pbuf(uint8_t * buf,int len, bool hex);
 
         unsigned char SendSMS(const char *Message, unsigned char *PhoneNumber);
     private:
 
-        uint8_t m_block[128] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
-        frame_header_t * m_frame_ptr;
-
-
+        //uint8_t m_block[128] __attribute__ ((aligned (__BIGGEST_ALIGNMENT__)));
+        //frame_header_t * m_frame_ptr;
 
         HardwareSerial & _serialPort; // Serial port attached to phone
         packet_t incomingPacket; // Incoming packet buffer
         frame_header_t outgoingPacket; // Outgoing packet buffer
+
         fbus_smsc_e m_smsc_type;
+        uint8_t m_smsc[10]; // always 10!
+
+        fbus_smsc_e m_phonenumber_type;
+        uint8_t m_phonenumber[10]; // always 10!
 
         void serialFlush(); // Empty the serial input buffer
+        uint8_t octetPack(char * instr,uint8_t * outbuf,uint8_t outbuf_size,uint8_t fill);
         void packetSend(frame_header_t * packet_ptr);
         uint8_t BitPack(uint8_t * buffer,uint8_t length);
         uint8_t BitUnpack(uint8_t * buffer,uint8_t length);
