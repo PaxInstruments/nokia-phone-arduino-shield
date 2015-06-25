@@ -46,11 +46,19 @@ FBus::FBus(HardwareSerial & serialPort)
 void FBus::process()
 {
     char c;
+    uint8_t count=0;
     while(_serialPort.available())
     {
         c=_serialPort.read();
         if(c==-1) break;
+        count++;
         this->processIncomingByte(c);
+    }
+    if(count>0)
+    {
+        char out[50];
+        sprintf(out,"Count: %d",count);
+        Serial.println(out);
     }
     return;
 }
@@ -61,10 +69,10 @@ void FBus::initialize()
     // Clear the RX
     serialFlush();
 
-    m_smsc_type = SMSC_TYPE_UNKNOWN;
+    m_smsc_type = NUMTYPE_UNKNOWN;
     memset(m_smsc,0,sizeof(m_smsc));
 
-    m_phonenumber_type = SMSC_TYPE_UNKNOWN;
+    m_phonenumber_type = NUMTYPE_UNKNOWN;
     memset(m_phonenumber,0,sizeof(m_phonenumber));
 
     // Send 0x55 to initialize the phone, based on
@@ -80,7 +88,7 @@ void FBus::initialize()
     return;
 }
 
-void FBus::SetSMSC(char * smsc, fbus_smsc_e type)
+void FBus::SetSMSC(char * smsc, fbus_number_type_e type)
 {
     uint8_t c;
     //pbuf((uint8_t*)smsc,strlen(smsc),true);
@@ -90,7 +98,7 @@ void FBus::SetSMSC(char * smsc, fbus_smsc_e type)
     m_smsc_type = type;
     return;
 }
-void FBus::SetPhoneNumber(char * number, fbus_smsc_e type)
+void FBus::SetPhoneNumber(char * number, fbus_number_type_e type)
 {
     uint8_t c;
     //pbuf((uint8_t*)number,strlen(number),true);
@@ -124,8 +132,8 @@ packet_t* FBus::requestHWSW()
 
 void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
 {
-    SetSMSC(msgcenter, SMSC_TYPE_UNKNOWN);
-    SetPhoneNumber(phonenum, SMSC_TYPE_UNKNOWN);
+    SetSMSC(msgcenter, NUMTYPE_UNKNOWN);
+    SetPhoneNumber(phonenum, NUMTYPE_UNKNOWN);
     SendSMS(message);
     return;
 }
@@ -160,7 +168,7 @@ void FBus::SendSMS(char * message)
         outgoingPacket.data[index++]=m_smsc[x];
     }
     outgoingPacket.FrameLength+=sizeof(m_smsc);
-#if 1
+
     // Add in magic number for outbound SMS type
     // The message is SMS Submit, Reject Duplicates, and Validity Indicator present.
     outgoingPacket.data[index++]=0x15;
@@ -223,8 +231,8 @@ void FBus::SendSMS(char * message)
 
     outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
     outgoingPacket.SeqNo = 0x43;
-#endif
-    pbuf(outgoingPacket.data,outgoingPacket.FrameLength,true);
+
+    //pbuf(outgoingPacket.data,outgoingPacket.FrameLength,true);
 
     packetSend(&outgoingPacket);
 
@@ -287,47 +295,14 @@ uint8_t FBus::octetPack(char * instr,uint8_t * outbuf,uint8_t outbuf_size,uint8_
 }
 
 // Send a packet
-void FBus::packetSend(frame_header_t * packet_ptr)
+void FBus::packetSend(packet_t * packet_ptr)
 {
-    #if 0
-    _serialPort->write(_packet->FrameID);
-    _serialPort->write(_packet->DestDEV);
-    _serialPort->write(_packet->SrcDEV);
-    _serialPort->write(_packet->MsgType);
-    _serialPort->write(_packet->FrameLengthMSB);
-    _serialPort->write(_packet->FrameLengthLSB);
-    if (_packet->MsgType == FBUSTYPE_ACK_MSG )
-    {
-        for ( byte i = 0x00; i < 2; i++ )
-        {
-            _serialPort->write(_packet->block[i]);
-        }
-    } else {
-        for ( byte i = 0x00; i < _packet->FrameLengthLSB - 2; i++ )
-        {
-            _serialPort->write(_packet->block[i]);
-        }
-        _serialPort->write(_packet->FramesToGo);
-        _serialPort->write(_packet->SeqNo);
-        if (_packet->FrameLengthLSB & 0x01)
-        {
-            _serialPort->write((byte)0x00);
-        }
-    }
-    checksum(_packet);
-    _serialPort->write(_packet->oddChecksum);
-    _serialPort->write(_packet->evenChecksum);
-    _serialPort->flush();
-    if (_packet->MsgType != FBUSTYPE_ACK_MSG ) {
-        getACK();
-    }
-    #else
     int count;
     uint8_t * data_ptr;
     uint8_t checksum_odd=0,checksum_even=0;
     data_ptr = (uint8_t*)&(packet_ptr->FrameID);
     count = packet_ptr->FrameLength;
-    count += (offsetof(frame_header_t,data)-offsetof(frame_header_t,FrameID));
+    count += (offsetof(packet_t,data)-offsetof(packet_t,FrameID));
     {
         char outbuf[50];
         sprintf(outbuf,"count: %d",count);
@@ -368,8 +343,6 @@ void FBus::packetSend(frame_header_t * packet_ptr)
     // Now send the checksums
     _serialPort.write(checksum_even);
     _serialPort.write(checksum_odd);
-
-    #endif
 
     return;
 }
@@ -413,10 +386,11 @@ uint8_t FBus::BitUnpack(uint8_t * buffer,uint8_t length)
 }
 
 
-void FBus::packetReset(frame_header_t *packet_ptr)
+void FBus::packetReset(packet_t *packet_ptr)
 {
-    memset(packet_ptr,0,sizeof(frame_header_t));
+    memset(packet_ptr,0,sizeof(packet_t));
 }
+
 #if 0
 // Verify or add a checksum
 int FBus::checksum(packet_t *_packet)
@@ -470,12 +444,12 @@ int FBus::checksum(packet_t *_packet)
 void FBus::processIncomingByte(uint8_t inbyte)
 {
     static uint8_t input_state = 0;
-// TODO
-// - Add a watchdog timer to this. Reset fieldIndex to zero if no change after a while
-// - Put this in the Arduino library
-// - Make a struct that uses this
-// - Trigger using a serial input interrupt. See http://stackoverflow.com/questions/10201590/arduino-serial-interrupts
-//
+    // TODO
+    // - Add a watchdog timer to this. Reset fieldIndex to zero if no change after a while
+    // - Put this in the Arduino library
+    // - Make a struct that uses this
+    // - Trigger using a serial input interrupt. See http://stackoverflow.com/questions/10201590/arduino-serial-interrupts
+    //
 #if 0
     switch (input_state)
     {
@@ -584,7 +558,7 @@ void FBus::processIncomingByte(uint8_t inbyte)
 // Retreive the incoming packet
 packet_t* FBus::getIncomingPacket()
 {
-#if 0
+    #if 0
     //packetReset(&incomingPacket);
     while ( !incomingPacket.packetReady )
     {  // TODO: Added a timeout function here
@@ -607,7 +581,7 @@ packet_t* FBus::getIncomingPacket()
         _serialPort->flush();
     }
     return &incomingPacket;
-#endif
+    #endif
     return NULL;
 }
 
@@ -745,17 +719,6 @@ byte FBus::reverseAndHex(int input)
     return reverseHex;
 #endif
     return 0;
-}
-
-void FBus::setSMSC(int SMSC_number)
-{
-#if 0
-    char a[] = { 0x12, 0x34, 0x56, 0x78, 0x90};
-    for ( int i; i < sizeof(a); i++ ){
-        a[i] = ((a[i] & 0xF) << 4) | (a[i] >> 4);
-    }
-    Serial.write(a, sizeof(a));
-#endif
 }
 
 /*

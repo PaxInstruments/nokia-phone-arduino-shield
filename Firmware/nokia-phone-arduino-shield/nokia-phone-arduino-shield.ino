@@ -34,8 +34,8 @@ void setup() {
     //myPhone.SetSMSC("+16091231234", SMSC_TYPE_NATIONAL);
     //myPhone.SetPhoneNumber("+16095298807", SMSC_TYPE_NATIONAL);
 
-    myPhone.SetSMSC("8613010888500",SMSC_TYPE_NATIONAL);
-    myPhone.SetPhoneNumber("15622834051",SMSC_TYPE_UNKNOWN);
+    myPhone.SetSMSC("8613010888500",NUMTYPE_NATIONAL);
+    myPhone.SetPhoneNumber("15622834051",NUMTYPE_UNKNOWN);
     myPhone.SendSMS("This message sent from Arduino");
 
     //myPhone.requestHWSW();
