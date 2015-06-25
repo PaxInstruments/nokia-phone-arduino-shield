@@ -70,7 +70,7 @@ void FBus::initialize()
     // Send 0x55 to initialize the phone, based on
     // captures 55 should be enough
     // http://www.codeproject.com/Articles/13452/A-Simple-Guide-To-Mobile-Phone-File-Transferring#Nokia_FBUS_File_Transferring
-    for (int i = 0; i < 55; i++) {
+    for (int i = 0; i < 128; i++) {
         _serialPort.write(0x55);
     }
     _serialPort.flush();
@@ -232,6 +232,7 @@ void FBus::SendSMS(char * message)
     //return _packet;
 
 }
+
 void FBus::pbuf(uint8_t * buf,int len, bool hex)
 {
     int x,id;
