@@ -1,4 +1,4 @@
-// fbus.cpp - Library for talking to an F-Bus device.
+// FBus.cpp - Library for talking to an F-Bus device.
 //
 //  Created by Charles Pax for Pax Instruments, 2015-05-23
 //  Please visit http://paxinstruments.com/products/
@@ -11,6 +11,12 @@
 //  FBus fred(&Serial1);
 //
 
+// Include any necessary files
+#include "Arduino.h"
+#include "HardwareSerial.h"
+#include "FBus.h"
+#include "string.h"
+
 #define UINT16_SWAP(V)      do{(V) = ((V)>>8)|((V)<<8);}while(0)
 
 // FrameID values
@@ -21,28 +27,18 @@
 #define FBUS_DEV_PHONE      0x00
 #define FBUS_DEV_HOST       0x0C
 
-// MsgType
-#define FBUSTYPE_REQ_HWSW   0xD1  // Request hardware and software information
-#define FBUSTYPE_ACK_MSG    0x7F
-#define FBUSTYPE_SMS        0x02
 
-// FrameLength
-#define FRAME_LENGTH_MAX    0xFF  // TODO: What is the maximum frame length?
-#define FRAME_LENGTH_MIN    0x00  // TODO: What is the minimum frame length?
-#define FRAME_LENGTH_MSB    0x00
-
-// Include any necessary files
-#include "Arduino.h"
-#include "HardwareSerial.h"
-#include "FBus.h"
-#include "string.h"
-
+// Constructor for FBus class, associates the serial port
+// with the member reference
 FBus::FBus(HardwareSerial & serialPort)
 : _serialPort(serialPort)
 {
     // Setup things
+    return;
 }
 
+// The 'process' routine is used for polling the serial port for data
+// from the phone.  All 'NEW' packets are ACKed and then marked as 'READY'
 void FBus::process()
 {
     char c;
@@ -52,14 +48,22 @@ void FBus::process()
         c=_serialPort.read();
         if(c==-1) break;
         count++;
-        this->processIncomingByte(c);
+        this->processIncomingByte(c,&incomingPacket);
+        if(incomingPacket.packet_state == PACKET_STATE_NEW)
+        {
+            // We have a new packet here!
+            Serial.println("New");
+            // Send the ACK
+            sendAck(incomingPacket.MsgType, incomingPacket.SeqNo);
+
+            // We could have taken a while to send the packet, so we could be
+            // receiving a new packet.  Make sure the packet is not in receiving
+            // and then mark it new
+            if(incomingPacket.packet_state != PACKET_STATE_RECEIVING)
+                incomingPacket.packet_state = PACKET_STATE_READY;
+        }
     }
-    if(count>0)
-    {
-        char out[50];
-        sprintf(out,"Count: %d",count);
-        Serial.println(out);
-    }
+
     return;
 }
 
@@ -72,22 +76,50 @@ void FBus::initialize()
     m_smsc_type = NUMTYPE_UNKNOWN;
     memset(m_smsc,0,sizeof(m_smsc));
 
-    m_phonenumber_type = NUMTYPE_UNKNOWN;
+    m_pnum_type = NUMTYPE_UNKNOWN;
     memset(m_phonenumber,0,sizeof(m_phonenumber));
 
-    // Send 0x55 to initialize the phone, based on
-    // captures 55 should be enough
-    // http://www.codeproject.com/Articles/13452/A-Simple-Guide-To-Mobile-Phone-File-Transferring#Nokia_FBUS_File_Transferring
-    for (int i = 0; i < 128; i++) {
-        _serialPort.write(0x55);
-    }
-    _serialPort.flush();
+    m_out_seqnum = 0;
+
+    ResetBus(128);
+
+    incomingPacket.packet_state = PACKET_STATE_EMPTY;
 
     // Phone should be in FBus mode now
 
     return;
 }
 
+// This 'resets' the FBus by sending 0x55 to the phone 'count' times
+void FBus::ResetBus(uint8_t count)
+{
+    // Send 0x55 to initialize the phone
+    // http://www.codeproject.com/Articles/13452/A-Simple-Guide-To-Mobile-Phone-File-Transferring#Nokia_FBUS_File_Transferring
+    for (int i = 0; i < count; i++) {
+        _serialPort.write(0x55);
+    }
+    _serialPort.flush();
+    return;
+}
+
+// Returns the current state of the packet,  The states are in the FBus.h header
+// file and represent the current state of the packet, if it is being received, if
+// is new and needs an ACK, or if it is ready to be processed
+uint8_t FBus::GetPacketState()
+{
+    return incomingPacket.packet_state;
+}
+
+// Marks a packet as empty
+void FBus::ClearPacket()
+{
+    if(incomingPacket.packet_state != PACKET_STATE_RECEIVING)
+        incomingPacket.packet_state = PACKET_STATE_EMPTY;
+    return;
+}
+
+// Set the SMS Center routing number and the type based on
+// GSM 03.40 ­ Technical realization of the Short Message Service (SMS) Point­to­Point (PP).
 void FBus::SetSMSC(char * smsc, fbus_number_type_e type)
 {
     uint8_t c;
@@ -98,17 +130,20 @@ void FBus::SetSMSC(char * smsc, fbus_number_type_e type)
     m_smsc_type = type;
     return;
 }
+
+// Set the phonenumber to use for the recepiant of the SMS
 void FBus::SetPhoneNumber(char * number, fbus_number_type_e type)
 {
     uint8_t c;
     //pbuf((uint8_t*)number,strlen(number),true);
     c = octetPack(number,m_phonenumber,sizeof(m_phonenumber),0x00);
     //pbuf((uint8_t*)m_phonenumber,sizeof(m_phonenumber),true);
-    m_phonenumber_type = type;
+    m_pnum_type = type;
     return;
 }
 
-packet_t* FBus::requestHWSW()
+// Send HWSW request packet
+void FBus::RequestHWSW()
 {
     // Send HWSW request packet
     //packetReset( &outgoingPacket );
@@ -123,29 +158,29 @@ packet_t* FBus::requestHWSW()
         outgoingPacket.data[i] = block[i];
     }
     outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
-    outgoingPacket.SeqNo = 0x60; // Calculated as previous SeqNo++
+
     packetSend(&outgoingPacket);
-    //packet_t* _packet = getIncomingPacket();
-    //return _packet;
-    return NULL;
+
+    return;
 }
 
+// SendSMS functions
 void FBus::SendSMS(char * phonenum,char * msgcenter, char * message)
 {
+    // Set the SMSC and Phone number, then send the msg
     SetSMSC(msgcenter, NUMTYPE_UNKNOWN);
     SetPhoneNumber(phonenum, NUMTYPE_UNKNOWN);
     SendSMS(message);
     return;
 }
-
 void FBus::SendSMS(char * message)
 {
     int index=0;
     int x,c,len;
 
-    // Send HWSW request packet
-    //packetReset( &outgoingPacket );
-    // Request HWSW information packet
+    // Based on Embedtronics testing on a Nokia 3310
+    // http://web.archive.org/web/20120712020156/http://www.embedtronics.com/nokia/fbus.html
+
     outgoingPacket.FrameID = FBUS_VIA_CABLE;
     outgoingPacket.DestDEV = FBUS_DEV_PHONE;
     outgoingPacket.SrcDEV = FBUS_DEV_HOST;
@@ -189,7 +224,7 @@ void FBus::SendSMS(char * message)
     outgoingPacket.FrameLength++;
 
     // Add number type
-    outgoingPacket.data[index++] = m_phonenumber_type;
+    outgoingPacket.data[index++] = m_pnum_type;
     outgoingPacket.FrameLength+=2;
 
     // Add in 10 bytes for phone number
@@ -230,17 +265,24 @@ void FBus::SendSMS(char * message)
     //outgoingPacket.FrameLength++;
 
     outgoingPacket.FramesToGo = 0x01; // Calculated number of remaining frames
-    outgoingPacket.SeqNo = 0x43;
+    //outgoingPacket.SeqNo = m_out_seqnum;
 
     //pbuf(outgoingPacket.data,outgoingPacket.FrameLength,true);
 
     packetSend(&outgoingPacket);
 
-    //packet_t* _packet = getIncomingPacket();
-    //return _packet;
-
+    return;
 }
 
+// Return the pointer of the RX packet for processing
+packet_t* FBus::GetRXPacketPtr()
+{
+    return &incomingPacket;
+}
+
+
+#ifdef FBUS_ENABLE_DEBUG
+// Prints a buffer to the PC Serial as hex
 void FBus::pbuf(uint8_t * buf,int len, bool hex)
 {
     int x,id;
@@ -249,7 +291,27 @@ void FBus::pbuf(uint8_t * buf,int len, bool hex)
     for(x=0;x<len;x++) id+=sprintf(&(out[id]),"x%02X,",buf[x]);
     //printf("\n");
     Serial.println(out);
+    return;
 }
+// Receives a single character command for testing
+void FBus::CMD(char c)
+{
+    switch(c){
+    case 'D':
+       Serial.println("Dump");
+       break;
+    case 'A':
+        sendAck(0x12, 0x34);
+        break;
+    case 'P':
+        pbuf((uint8_t*)&incomingPacket,incomingPacket.FrameLength+offsetof(packet_t,data),true);
+        break;
+    default:
+       break;
+    }
+    return;
+}
+#endif
 
 // Private functions
 // ------------------------------------------------------
@@ -263,9 +325,9 @@ void FBus::serialFlush()
     return;
 }
 
+// Pack a given string into reversed octets Eg: "1234" -> 0x21,0x43
 uint8_t FBus::octetPack(char * instr,uint8_t * outbuf,uint8_t outbuf_size,uint8_t fill)
 {
-
     char c;
     uint8_t x,i;
     memset(outbuf,0,outbuf_size);
@@ -294,52 +356,69 @@ uint8_t FBus::octetPack(char * instr,uint8_t * outbuf,uint8_t outbuf_size,uint8_
     return (x/2);
 }
 
-// Send a packet
+// Send a packet, this does all the checksuming and padding, just load up the
+// correct info and call this.
+// DONT ADD ANY EXTRA PADDING TO MSGS, ALL DONE HERE
 void FBus::packetSend(packet_t * packet_ptr)
 {
     int count;
     uint8_t * data_ptr;
     uint8_t checksum_odd=0,checksum_even=0;
     data_ptr = (uint8_t*)&(packet_ptr->FrameID);
-    count = packet_ptr->FrameLength;
-    count += (offsetof(packet_t,data)-offsetof(packet_t,FrameID));
-    {
-        char outbuf[50];
-        sprintf(outbuf,"count: %d",count);
-        Serial.println(outbuf);
-    }
-    if(count&1) packet_ptr->FrameLength++;
-    // Add 2 to FrameLength for the padding16 bytes
-    // Add 1 to FrameLength for the FramesToGo value
-    packet_ptr->FrameLength+=3;
-    packet_ptr->padding16 = 1;
-    UINT16_SWAP(packet_ptr->FrameLength);
-    UINT16_SWAP(packet_ptr->padding16);
-    for(int x=0;x<count;x++)
-    {
-        _serialPort.write(data_ptr[x]);
-        if(x&1)
-            checksum_odd ^= data_ptr[x];
-        else
-            checksum_even ^= data_ptr[x];
-    }
 
-    // Now send the last 2 data bytes
-    _serialPort.write(packet_ptr->FramesToGo);
-    _serialPort.write(packet_ptr->SeqNo);
-
-    if(count&1)
+    if(packet_ptr->MsgType == FBUSTYPE_ACK_MSG)
     {
-        checksum_odd ^= packet_ptr->FramesToGo;
-        checksum_even ^= packet_ptr->SeqNo;
+        // Send the header
+        count = (offsetof(packet_t,padding16)-offsetof(packet_t,FrameID));
+        UINT16_SWAP(packet_ptr->FrameLength);
+        for(int x=0;x<count;x++)
+        {
+            _serialPort.write(data_ptr[x]);
+            if(x&1)
+                checksum_odd ^= data_ptr[x];
+            else
+                checksum_even ^= data_ptr[x];
+        }
+        _serialPort.write(packet_ptr->data[0]);
+        checksum_even ^= packet_ptr->data[0];
+        _serialPort.write(packet_ptr->data[1]);
+        checksum_odd ^= packet_ptr->data[1];
     }else{
-        checksum_even ^= packet_ptr->FramesToGo;
-        checksum_odd ^= packet_ptr->SeqNo;
+        packet_ptr->SeqNo = m_out_seqnum++;
+        count = packet_ptr->FrameLength;
+        count += (offsetof(packet_t,data)-offsetof(packet_t,FrameID));
+        if(count&1) packet_ptr->FrameLength++;
+        // Add 2 to FrameLength for the padding16 bytes
+        // Add 1 to FrameLength for the FramesToGo value
+        packet_ptr->FrameLength+=3;
+        packet_ptr->padding16 = 1;
+        UINT16_SWAP(packet_ptr->FrameLength);
+        UINT16_SWAP(packet_ptr->padding16);
+        for(int x=0;x<count;x++)
+        {
+            _serialPort.write(data_ptr[x]);
+            if(x&1)
+                checksum_odd ^= data_ptr[x];
+            else
+                checksum_even ^= data_ptr[x];
+        }
+
+        // Now send the last 2 data bytes
+        _serialPort.write(packet_ptr->FramesToGo);
+        _serialPort.write(packet_ptr->SeqNo);
+
+        if(count&1)
+        {
+            checksum_odd ^= packet_ptr->FramesToGo;
+            checksum_even ^= packet_ptr->SeqNo;
+        }else{
+            checksum_even ^= packet_ptr->FramesToGo;
+            checksum_odd ^= packet_ptr->SeqNo;
+        }
+
+        // Make sure we send an even number of bytes
+        if(count&1) _serialPort.write(0);
     }
-
-    // Make sure we send an even number of bytes
-    if(count&1) _serialPort.write(0);
-
     // Now send the checksums
     _serialPort.write(checksum_even);
     _serialPort.write(checksum_odd);
@@ -347,6 +426,9 @@ void FBus::packetSend(packet_t * packet_ptr)
     return;
 }
 
+// 7bit packing algorithm based on
+// GSM 03.38 ­ Alphabets and language­specific information.
+//
 // Improved bit packing algorithm based on Embedtronics page.  This
 // overwrites the same buffer so is more efficient
 // max length is 255
@@ -376,6 +458,8 @@ uint8_t FBus::BitPack(uint8_t * buffer,uint8_t length)
     return x;
 }
 
+// TODO
+// Unpack a 7bit encoded string
 // We will need (length/7) extra bytes for the message
 //uint8_t decode[128];
 uint8_t FBus::BitUnpack(uint8_t * buffer,uint8_t length)
@@ -385,220 +469,167 @@ uint8_t FBus::BitUnpack(uint8_t * buffer,uint8_t length)
     return 0;
 }
 
-
+// Clear all data in a packet
 void FBus::packetReset(packet_t *packet_ptr)
 {
-    memset(packet_ptr,0,sizeof(packet_t));
+    memset((uint8_t*)packet_ptr,0,sizeof(packet_t));
+    return;
 }
-
-#if 0
-// Verify or add a checksum
-int FBus::checksum(packet_t *_packet)
-{
-    byte oddChecksum, evenChecksum = 0x00;
-    oddChecksum ^= _packet->FrameID;
-    evenChecksum ^= _packet->DestDEV;
-    oddChecksum ^= _packet->SrcDEV;
-    evenChecksum ^= _packet->MsgType;
-    oddChecksum ^= _packet->FrameLengthMSB;
-    evenChecksum ^= _packet->FrameLengthLSB;
-    if ( _packet->MsgType == FBUSTYPE_ACK_MSG )
-    {
-        for ( byte i = 0x00; i < _packet->FrameLengthLSB; i += 2 )
-        {
-            oddChecksum ^= _packet->block[i];
-        }
-        for ( byte i = 0x01; i < _packet->FrameLengthLSB; i += 2 )
-        {
-            evenChecksum ^= _packet->block[i];
-        }
-    } else {
-        for ( byte i = 0x00; i < _packet->FrameLengthLSB - 2; i += 2 )
-        {
-            oddChecksum ^= _packet->block[i];
-        }
-        for ( byte i = 0x01; i < _packet->FrameLengthLSB - 2; i += 2 )
-        {
-            evenChecksum ^= _packet->block[i];
-        }
-        if ( _packet->FrameLengthLSB & 0x01 ) {
-            evenChecksum ^= _packet->FramesToGo;
-            oddChecksum ^= _packet->SeqNo;
-        } else {
-            oddChecksum ^= _packet->FramesToGo;
-            evenChecksum ^= _packet->SeqNo;
-        }
-    }
-    if ( oddChecksum == _packet->oddChecksum && evenChecksum == _packet->evenChecksum )
-    {
-        return 1;
-    } else {
-        _packet->oddChecksum = oddChecksum;
-        _packet->evenChecksum = evenChecksum;
-        return 0;
-    }
-}
-#endif
 
 // Byte-wise process the data stream
-void FBus::processIncomingByte(uint8_t inbyte)
+void FBus::processIncomingByte(uint8_t inbyte, packet_t * pktptr)
 {
-    static uint8_t input_state = 0;
     // TODO
     // - Add a watchdog timer to this. Reset fieldIndex to zero if no change after a while
     // - Put this in the Arduino library
     // - Make a struct that uses this
     // - Trigger using a serial input interrupt. See http://stackoverflow.com/questions/10201590/arduino-serial-interrupts
-    //
-#if 0
-    switch (input_state)
+
+    switch (pktptr->input_state)
     {
         case 0x00:  // FrameID
-            _packet->FrameID = inbyte;
-            if ( _packet->FrameID == FBUS_VIA_CABLE) {
-                input_state++;
+            if ( inbyte == FBUS_VIA_CABLE) {
+                // This is the start of a new packet
+                pktptr->FrameID = inbyte;
+                pktptr->rx_blockIndex = 0;
+                pktptr->packet_state = PACKET_STATE_RECEIVING;
+                pktptr->input_checksum_odd = 0;
+                pktptr->input_checksum_even = 0;
+                pktptr->input_checksum_odd^=inbyte;
+                pktptr->input_state++;
             } else {
-                //packetReset(_packet);
+                pktptr->input_state=0;
             }
             break;
         case 0x01:  // DestDEV
-            _packet->DestDEV = inbyte;
-            if ( _packet->DestDEV == FBUS_DEV_HOST) {
-                input_state++;
+            if ( inbyte == FBUS_DEV_HOST) {
+                pktptr->DestDEV = inbyte;
+                pktptr->input_state++;
+                pktptr->input_checksum_even^=inbyte;
             } else {
-                //packetReset(_packet);
+                pktptr->input_state=0;
             }
             break;
         case 0x02:  // SrcDEV
-            _packet->SrcDEV = inbyte;
-            if ( _packet->SrcDEV == FBUS_DEV_PHONE) {
-                input_state++;
+            if ( inbyte == FBUS_DEV_PHONE) {
+                pktptr->SrcDEV = inbyte;
+                pktptr->input_state++;
+                pktptr->input_checksum_odd^=inbyte;
             } else {
-                //packetReset(_packet);
+                pktptr->input_state=0;
             }
             break;
         case 0x03:  // MsgType
-            // TODO: Verify MsgType is one we know
-            _packet->MsgType = inbyte;
-            if ( 1 ) {
-                input_state++;
-            } else {
-                // TODO: Throw unknown packet error
-                //packetReset(_packet);
-            }
+            pktptr->MsgType = inbyte;
+            pktptr->input_checksum_even^=inbyte;
+            pktptr->input_state++;
             break;
         case 0x04:  // FrameLengthMSB
-            _packet->FrameLengthMSB = inbyte;
-            if ( _packet->FrameLengthMSB == 0x00 ) {
-                input_state++;
-            } else {
-                // TODO: throw FrameLengthMSB our of range error
-                //packetReset(_packet);
-            }
+            pktptr->FrameLength = inbyte;
+            pktptr->FrameLength<<=8;
+            pktptr->input_checksum_odd^=inbyte;
+            pktptr->input_state++;
             break;
         case 0x05:  // FrameLengthLSB
-            _packet->FrameLengthLSB = inbyte;
-            if ( FRAME_LENGTH_MIN < _packet->FrameLengthLSB < FRAME_LENGTH_MAX ) {
-                input_state++;
-            } else {
-                // TODO: throw FrameLengthLSB our of range error
-                //packetReset(_packet);
+            pktptr->FrameLength += inbyte;
+            // If we don't have data, skip to FramesToGo
+            pktptr->input_checksum_even^=inbyte;
+            if(pktptr->FrameLength<=2)
+            {
+                pktptr->rx_blockIndex=1;
+                pktptr->input_state+=2;
+            }else{
+                pktptr->input_state++;
             }
             break;
         case 0x06:  // {block}
-            _packet->block[_packet->blockIndex] = inbyte;
-            _packet->blockIndex++;
-            if ( _packet->MsgType == FBUSTYPE_ACK_MSG ) {
-                if ( _packet->blockIndex >= 2 ) {
-                    input_state += 3;
-                }
-            } else if (_packet->blockIndex >= _packet->FrameLengthLSB - 2 ) {
-                input_state++;
+            pktptr->data[pktptr->rx_blockIndex] = inbyte;
+
+            if(pktptr->rx_blockIndex&1)
+            {
+                pktptr->input_checksum_even^=inbyte;
+            }else{
+                pktptr->input_checksum_odd^=inbyte;
+            }
+
+            pktptr->rx_blockIndex++;
+            if(pktptr->rx_blockIndex >= pktptr->FrameLength - 2 )
+            {
+                pktptr->rx_blockIndex--;
+                pktptr->input_state++;
             }
             break;
         case 0x07:  // FramesToGo
-            _packet->FramesToGo = inbyte;
-            input_state++;
+            pktptr->FramesToGo = inbyte;
+            if(pktptr->rx_blockIndex&1)
+            {
+                pktptr->input_checksum_odd^=inbyte;
+            }else{
+                pktptr->input_checksum_even^=inbyte;
+            }
+            pktptr->input_state++;
             break;
         case 0x08:
-            _packet->SeqNo = inbyte;
-            input_state++;
+            pktptr->SeqNo = inbyte;
+            if((pktptr->rx_blockIndex+1)&1)
+            {
+                pktptr->input_checksum_odd^=inbyte;
+            }else{
+                pktptr->input_checksum_even^=inbyte;
+            }
+            pktptr->input_state++;
             break;
         case 0x09:  // 0x00 or oddChecksum
-            if (_packet->FrameLengthLSB & 0x01) {
-                //_serialPort->read();
-            } else {
-                _packet->oddChecksum = inbyte;
-            }
-            input_state++;
+            if(pktptr->input_checksum_odd!= inbyte)
+                pktptr->packet_state = PACKET_STATE_CHECKSUM_FAIL;
+            pktptr->input_state++;
             break;
-        case 0x0A:
-            if (_packet->FrameLengthLSB & 0x01) {
-                _packet->oddChecksum = inbyte;
-                input_state++;
-            } else {  // Packet complete
-                _packet->evenChecksum = inbyte;
-                //_packet->packetReady = checksum(_packet);
+        case 0x0A:// Packet complete
+            if(pktptr->input_checksum_even!= inbyte)
+                pktptr->packet_state = PACKET_STATE_CHECKSUM_FAIL;
+            // Take 2 off the length because the FramesToGo and SeqNum are removed
+            pktptr->FrameLength -= 2;
+
+            if(pktptr->packet_state != PACKET_STATE_CHECKSUM_FAIL)
+            {
+                pktptr->packet_state = PACKET_STATE_NEW;
             }
-            break;
-        case 0x0B:  // Packet complete
-            _packet->evenChecksum = inbyte;
-            //_packet->packetReady = checksum(_packet);
+
+            // Reset the packet rx state info
+            pktptr->input_state=0;
             break;
         default: 
             break;
             // We should never get here. Throw error?
     }
-#endif
+
+    return;
+}
+
+// Send an ACK packet for a given MsgType and SeqNo
+void FBus::sendAck(byte MsgType, byte SeqNo )
+{
+    // Acknowledge packet
+    outgoingPacket.FrameID = FBUS_VIA_CABLE;
+    outgoingPacket.DestDEV = FBUS_DEV_PHONE;
+    outgoingPacket.SrcDEV = FBUS_DEV_HOST;
+    outgoingPacket.MsgType = FBUSTYPE_ACK_MSG;
+    outgoingPacket.FrameLength = 0x0002;
+    outgoingPacket.data[0] = MsgType;
+    outgoingPacket.data[1] = SeqNo & 0x07;
+
+    packetSend( &outgoingPacket );
 
     return;
 }
 
 
-// Retreive the incoming packet
-packet_t* FBus::getIncomingPacket()
-{
-    #if 0
-    //packetReset(&incomingPacket);
-    while ( !incomingPacket.packetReady )
-    {  // TODO: Added a timeout function here
-        // DEBUG NTOES:
-        // We get to here just fine
-        //_serialPort->write(0xD0);
-        // Repeats 0xD0 forever
-        if ( _serialPort->available() )
-        {
-            // DEBUG NOTES:
-            // We get here just fine
-            // _serialPort->write(0xD1);
-            // Appears to write 0xD1 while processing bytes
-            //processIncomingByte(&incomingPacket);
-        }
-    }
-    if ( incomingPacket.MsgType != FBUSTYPE_ACK_MSG )
-    {
-        sendAck(incomingPacket.MsgType, incomingPacket.SeqNo );
-        _serialPort->flush();
-    }
-    return &incomingPacket;
-    #endif
-    return NULL;
-}
-
-
-void FBus::getACK()
-{
-    // TODO
-    // - Implement a stack system
-    // - Remove acknowledged packets form the outgoing stack
-    getIncomingPacket();
-}
-
-
+// Old functions
+// TODO: Move them into a higher level phone class
 
 String FBus::versionSW()
 {
-#if 0
+    #if 0
     // Return
     // TODO
     // - Seek through block to find software version string
@@ -610,7 +641,7 @@ String FBus::versionSW()
     }
 
     return sw_version;
-#endif
+    #endif
     return "0";
 }
 
@@ -619,7 +650,7 @@ String FBus::versionDate()
     // Return hardware version
     // TODO
     // - Seek through block to find date string
-#if 0
+    #if 0
     String version_date = "";
     packet_t* _packet = requestHWSW();
     for (int i = 17; i < 25; i++) {
@@ -628,13 +659,13 @@ String FBus::versionDate()
     }
     
     return version_date;
-#endif
+    #endif
     return "0";
 }
 
 String FBus::versionHW()
 {
-#if 0
+    #if 0
     // Return hardware version
     // TODO
     // - Seek through block to find hardware version string
@@ -646,108 +677,8 @@ String FBus::versionHW()
     }
     
     return hw_version;
-#endif
+    #endif
     return "0";
 }
 
-void FBus::sendAck(byte MsgType, byte SeqNo )
-{
-#if 0
-    // Acknowledge packet
-    //packetReset( &outgoingPacket );
-    outgoingPacket.FrameID = 0x1E;
-    outgoingPacket.DestDEV = 0x00;
-    outgoingPacket.SrcDEV = 0x0C;
-    outgoingPacket.MsgType = 0x7F;
-    outgoingPacket.FrameLengthMSB = 0x00;
-    outgoingPacket.FrameLengthLSB = 0x02;
-    byte block[] = { MsgType, SeqNo & 0x07 };
-    for (int i=0; i<sizeof(block); i++) {
-        outgoingPacket.block[i] = block[i];
-    }
-    //checksum(&outgoingPacket);
-    //packetSend( &outgoingPacket );    byte oddCheckSum = 0x00, evenCheckSum = 0x00;
-#endif
-}
-
-void FBus::packBytes()
-{
-#if 0
-    //
-    //
-    // TODO
-    // - Input an array pointer to input[]
-    // - Output an array pointer to decoded[]
-
-    char input [] = { 0b01101000, 0b01100101, 0b01101100, 0b01101100, 0b01101111 };
-    char msg[128];
-    char decode[128] = {};
-    int len;
-
-    unsigned char c = 0;
-    unsigned char w  = 0;
-    int n = 0;
-    int shift = 0;
-    int x = 0;
-
-    for ( n=0 ; n<5 ; ++n ) {
-        c = input[n] & 0b01111111;
-        c >>= shift;
-        w = input[n+1] & 0b01111111;
-        w <<= (7-shift);
-        shift +=1;
-        c = c | w;
-        if (shift == 7) {
-            shift = 0x00;
-            n++;
-        }
-        x = strlen(decode);
-        decode[x] = c;
-        decode[x+1] = 0;
-    }
-#endif
-}
-
-byte FBus::reverseAndHex(int input)
-{
-#if 0
-    // Reverse digits of an interger and output hex
-    // Example: input = 73, output = 0x37
-    // Example: input = 5, output = 0x50
-    int reverse = input%10 * 10 + input/10;
-    byte reverseHex = 0; // Fix this
-    return reverseHex;
-#endif
-    return 0;
-}
-
-/*
-    byte message[] = { 'h', 'e', 'l', 'l', 'o', '\0' };
-    char messagePacked[sizeof(message)];
-
-    unsigned char holder;
-    unsigned char bucket;
-    char decode[128];
-    int x;
-    int shifted = 0;
-    for ( int i = 0; i < sizeof(message); i++ ) {
-        holder = message[i] & 0x7f;
-        holder >>= shifted;
-        bucket = message[i+1] & 0x7f;
-        bucket <<= (7-shifted);
-        shifted += 1;
-        holder = holder | bucket;
-        if (shifted == 7) {
-            shifted = 0x00;
-            i++;
-        }
-        x = strlen(decode);
-        decode[x] = holder;
-        decode[x+1] = 0;
-    }
-
-
-    for ( int i = 0; i < strlen(decode); i++ ) {
-        Serial.print((unsigned char)decode[i]);
-    }
-*/
+// eof
