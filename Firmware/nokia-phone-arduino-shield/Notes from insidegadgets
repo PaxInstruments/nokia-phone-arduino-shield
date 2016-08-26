@@ -1,0 +1,15 @@
+# Notes from insidegadgets
+
+## Resources
+- InsideGadgets - http://www.insidegadgets.com/2013/01/12/how-to-use-nokia-f-bus-to-send-an-sms-message/
+- Embedtronics – F-bus packet explanation with some examples of a packet
+  http://web.archive.org/web/20120712020156/http://www.embedtronics.com/nokia/fbus.html
+- Avr and nokia3310 interface(sms) project on AVRfreaks – Code for an AVR to send/receive SMS
+  http://www.avrfreaks.net/index.php?module=Freaks%20Academy&func=viewItem&item_id=3326&item_type=project
+- Gnokii – F-bus documentation and code to run on a computer
+  http://gnokii.org/
+- AVRfreaks project http://www.avrfreaks.net/index.php?module=Freaks%20Academy&func=viewItem&item_id=3326&item_type=project
+
+## TODO
+- Research the acknowledgement packet MsgType. This may be a calculated value.
+  nk6110.txt: 0x7f: Acknowledge(FBUS/IRDA){+type, seq }
